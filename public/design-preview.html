@@ -1,0 +1,1408 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SCI Election 2026/2027 - Minimal Design Preview (Decision #6)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-page: #fafafa;
+        --bg-surface: #ffffff;
+        --bg-subtle: #f4f4f5;
+        --border: #e4e4e7;
+        --border-hover: #d4d4d8;
+        --text-primary: #09090b;
+        --text-secondary: #52525b;
+        --text-muted: #71717a;
+        --emerald: #10b981;
+        --emerald-dark: #059669;
+        --emerald-soft: #ecfdf5;
+        --emerald-border: #a7f3d0;
+        --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        --radius-lg: 14px;
+        --radius-md: 10px;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        font-family: var(--font-sans) !important;
+        background-color: var(--bg-page);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.5;
+      }
+
+      .font-mono {
+        font-family: var(--font-mono) !important;
+      }
+
+      /* Subtle dot grid texture inspired by Supabase */
+      .bg-dot-grid {
+        background-image: radial-gradient(#e4e4e7 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+
+      /* Top Design Review Control Bar */
+      .spec-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .spec-toolbar-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 10px 20px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .spec-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .spec-pill {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+      }
+
+      .toolbar-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .ctrl-btn {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        transition: all 0.18s var(--ease);
+      }
+
+      .ctrl-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text-primary);
+      }
+
+      .ctrl-btn.active {
+        background: var(--emerald-soft);
+        border-color: var(--emerald-border);
+        color: var(--emerald-dark);
+      }
+
+      /* Glowing Green Live Dot */
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        display: inline-block;
+        transition: all 0.3s var(--ease);
+      }
+
+      .status-dot.live {
+        background: var(--emerald);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2), 0 0 12px rgba(16, 185, 129, 0.65);
+        animation: pulseGlow 2.2s infinite ease-in-out;
+      }
+
+      .status-dot.off {
+        background: #a1a1aa;
+        box-shadow: none;
+      }
+
+      @keyframes pulseGlow {
+        0%,
+        100% {
+          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.08), 0 0 16px rgba(16, 185, 129, 0.8);
+        }
+      }
+
+      /* Container & Section Framing */
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 48px;
+      }
+
+      .section-block {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .section-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .section-label h2 {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+
+      .section-label span {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Card Base (Supabase 1px border feel) */
+      .card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        transition: border-color 0.2s var(--ease), transform 0.2s var(--ease),
+          box-shadow 0.2s var(--ease);
+      }
+
+      .card-hover:hover {
+        border-color: var(--emerald-border);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px -12px rgba(9, 9, 11, 0.08);
+      }
+
+      /* Section A: Desktop Navbar + Mobile Previews */
+      .portal-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        gap: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .logo-pair {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 10px;
+        background: var(--bg-page);
+        border: 1px solid var(--border);
+      }
+
+      .logo-pair img {
+        height: 24px;
+        width: 24px;
+        object-fit: contain;
+      }
+
+      .logo-sep {
+        width: 1px;
+        height: 16px;
+        background: var(--border);
+      }
+
+      .brand-text-sub {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--emerald-dark);
+      }
+
+      .brand-text-main {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .nav-link {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 7px 12px;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        transition: all 0.16s var(--ease);
+      }
+
+      .nav-link:hover {
+        background: var(--bg-subtle);
+        color: var(--text-primary);
+      }
+
+      .nav-link.active {
+        background: var(--emerald-soft);
+        color: var(--emerald-dark);
+      }
+
+      .nav-user {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .user-meta {
+        text-align: right;
+        line-height: 1.25;
+      }
+
+      .user-name {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .user-id {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .btn-primary {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 8px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--emerald-dark);
+        background: var(--emerald-dark);
+        color: #ffffff;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.18s var(--ease);
+      }
+
+      .btn-primary:hover {
+        background: #047857;
+      }
+
+      .btn-outline {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.18s var(--ease);
+      }
+
+      .btn-outline:hover {
+        border-color: var(--border-hover);
+        background: var(--bg-subtle);
+      }
+
+      /* Mobile Frames Grid */
+      .mobile-pair-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+        align-items: start;
+      }
+
+      .phone-frame {
+        background: var(--bg-page);
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        padding: 14px;
+        box-shadow: 0 20px 44px -20px rgba(9, 9, 11, 0.15);
+        max-width: 360px;
+        width: 100%;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 460px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .phone-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .floating-bottom-nav {
+        margin-top: auto;
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 10px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 2px;
+        box-shadow: 0 12px 26px -10px rgba(9, 9, 11, 0.18);
+      }
+
+      .bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 2px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.16s var(--ease);
+      }
+
+      .bottom-nav-item.active {
+        background: var(--emerald-soft);
+        color: var(--emerald-dark);
+      }
+
+      /* Google OAuth Button */
+      .google-btn {
+        width: 100%;
+        padding: 11px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #ffffff;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: all 0.18s var(--ease);
+      }
+
+      .google-btn:hover {
+        border-color: var(--emerald-border);
+        background: var(--bg-page);
+      }
+
+      /* Section B: Home Elements */
+      .hero-box {
+        text-align: center;
+        padding: 36px 24px 28px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        background: var(--bg-surface);
+      }
+
+      .live-indicator-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--bg-page);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .hero-title {
+        font-size: clamp(26px, 4vw, 38px);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.12;
+        color: var(--text-primary);
+      }
+
+      .hero-sub {
+        font-size: 14px;
+        color: var(--text-muted);
+        max-width: 540px;
+        margin: 10px auto 0;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+
+      .action-card {
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .icon-box {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-page);
+        color: var(--emerald-dark);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .stat-card {
+        padding: 20px 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .stat-val {
+        font-family: var(--font-mono);
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+      }
+
+      .stat-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+
+      /* 4-Step Phase Bar */
+      .phase-bar {
+        padding: 18px 20px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+
+      @media (max-width: 720px) {
+        .phase-bar {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .nav-links {
+          display: none;
+        }
+      }
+
+      .phase-step {
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-page);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        transition: all 0.2s var(--ease);
+      }
+
+      .phase-step.active {
+        background: var(--emerald-soft);
+        border-color: var(--emerald-border);
+      }
+
+      .phase-step-num {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+      }
+
+      .phase-step.active .phase-step-num {
+        color: var(--emerald-dark);
+      }
+
+      .phase-step-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .phase-step-note {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      /* Section C: Candidates & Floating Ballot */
+      .candidate-card {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .candidate-card.selected {
+        border-color: var(--emerald);
+        background: #f6fef9;
+        box-shadow: 0 0 0 1px var(--emerald);
+      }
+
+      .avatar-badge {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #059669, #065f46);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 18px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      .select-circle {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        border: 1.5px solid var(--border-hover);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        transition: all 0.16s var(--ease);
+      }
+
+      .candidate-card.selected .select-circle {
+        background: var(--emerald-dark);
+        border-color: var(--emerald-dark);
+      }
+
+      .meta-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .floating-ballot {
+        margin-top: 4px;
+        background: #09090b;
+        color: #ffffff;
+        border-radius: 14px;
+        padding: 12px 18px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        box-shadow: 0 16px 36px -14px rgba(9, 9, 11, 0.45);
+      }
+
+      /* Section D: Minimal Live Results (Top 8 normal, #9+ dimmed) */
+      .results-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .result-row {
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        transition: opacity 0.2s var(--ease), border-color 0.2s var(--ease);
+      }
+
+      .result-row.dimmed {
+        opacity: 0.44;
+        background: var(--bg-page);
+      }
+
+      .result-row.dimmed .avatar-badge {
+        background: #71717a;
+      }
+
+      .result-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .result-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .rank-num {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 700;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--bg-page);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: var(--text-primary);
+      }
+
+      .vote-tally {
+        font-family: var(--font-mono);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .vote-tally small {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
+      .bar-track {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--bg-subtle);
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--emerald);
+        transition: width 0.5s var(--ease);
+      }
+
+      .result-row.dimmed .bar-fill {
+        background: #a1a1aa;
+      }
+
+      /* Section E: C4 Tribute & Lab Voting Preview */
+      .split-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+      }
+    </style>
+  </head>
+  <body class="bg-dot-grid">
+    <!-- Interactive Design Review Toolbar -->
+    <div class="spec-toolbar">
+      <div class="spec-toolbar-inner">
+        <div class="spec-title">
+          <span>SCI Election 2026/2027 - Visual Design Preview</span>
+          <span class="spec-pill">Decision #6 Check</span>
+        </div>
+
+        <div class="toolbar-controls">
+          <button type="button" id="toggleLiveDotBtn" class="ctrl-btn active">
+            <span id="toolbarDot" class="status-dot live"></span>
+            <span id="toolbarDotText">Voting Dot: LIVE</span>
+          </button>
+
+          <button type="button" class="ctrl-btn" data-phase-btn="0">1. Nominations</button>
+          <button type="button" class="ctrl-btn" data-phase-btn="1">2. Campaign</button>
+          <button type="button" class="ctrl-btn active" data-phase-btn="2">3. Voting Live</button>
+          <button type="button" class="ctrl-btn" data-phase-btn="3">4. Ended</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="container">
+      <!-- SECTION A: Desktop Navbar + Mobile Floating Bottom Nav + Mobile Login -->
+      <section class="section-block">
+        <div class="section-label">
+          <h2>A. Navigation &amp; Mobile Experience</h2>
+          <span>Minimal top bar on desktop | Thumb-friendly floating bottom nav + 1-card OAuth login on phone</span>
+        </div>
+
+        <div class="card portal-nav">
+          <div class="brand">
+            <div class="logo-pair">
+              <img
+                src="./sci-voting-portal/public/logos/aiu-logo.png"
+                onerror="if(!this.dataset.f){this.dataset.f=1;this.src='./logos/aiu-logo.png';}"
+                alt="AIU"
+              />
+              <span class="logo-sep"></span>
+              <img
+                src="./sci-voting-portal/public/logos/sci-logo.png"
+                onerror="if(!this.dataset.f){this.dataset.f=1;this.src='./logos/sci-logo.png';}"
+                alt="SCI"
+              />
+            </div>
+            <div>
+              <div class="brand-text-sub">SCI Elections 26/27</div>
+              <div class="brand-text-main">Student Portal</div>
+            </div>
+          </div>
+
+          <div class="nav-links">
+            <a href="#sec-home" class="nav-link active">Home</a>
+            <a href="#sec-candidates" class="nav-link">Candidates</a>
+            <a href="#sec-results" class="nav-link">
+              <span class="status-dot live js-live-dot"></span>
+              Live Results
+            </a>
+          </div>
+
+          <div class="nav-user">
+            <div class="user-meta">
+              <div class="user-name">Abdulkarem Abubakar Ajogal</div>
+              <div class="user-id">AIU24102323</div>
+            </div>
+            <button type="button" class="btn-primary">Logout</button>
+          </div>
+        </div>
+
+        <!-- Mobile Side-by-Side Previews -->
+        <div class="mobile-pair-grid">
+          <!-- Phone 1: Mobile Home + Floating Bottom Pill -->
+          <div class="phone-frame">
+            <div class="phone-topbar">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <img
+                  src="./sci-voting-portal/public/logos/sci-logo.png"
+                  onerror="if(!this.dataset.f){this.dataset.f=1;this.src='./logos/sci-logo.png';}"
+                  alt="SCI"
+                  style="height:22px;width:22px;object-fit:contain;"
+                />
+                <span style="font-size:12px;font-weight:800;">SCI 26/27</span>
+              </div>
+              <span class="spec-pill" style="display:inline-flex;align-items:center;gap:6px;">
+                <span class="status-dot live js-live-dot"></span>
+                <span class="js-live-label">Live</span>
+              </span>
+            </div>
+
+            <div style="padding:18px 8px;display:flex;flex-direction:column;gap:12px;">
+              <div class="card" style="padding:16px;">
+                <div style="font-size:11px;color:var(--text-muted);font-weight:600;">
+                  Mobile Preview
+                </div>
+                <div style="font-size:16px;font-weight:800;margin-top:4px;">
+                  SCI Top Committee Election 2026/2027
+                </div>
+                <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">
+                  Public Home, Candidates, and Live Results load right away. Sign in only when voting
+                  or applying.
+                </p>
+              </div>
+              <div class="card" style="padding:14px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:12px;font-weight:700;">Vote Now</span>
+                <span class="btn-primary" style="padding:5px 10px;font-size:11px;">Open Ballot</span>
+              </div>
+            </div>
+
+            <nav class="floating-bottom-nav" aria-label="Mobile Floating Navigation">
+              <button type="button" class="bottom-nav-item active">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+                </svg>
+                <span>Home</span>
+              </button>
+              <button type="button" class="bottom-nav-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <span>Candidates</span>
+              </button>
+              <button type="button" class="bottom-nav-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                <span>Vote</span>
+              </button>
+              <button type="button" class="bottom-nav-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 3v18h18" />
+                  <path d="M18 17V9" />
+                  <path d="M13 17V5" />
+                  <path d="M8 17v-3" />
+                </svg>
+                <span>Results</span>
+              </button>
+              <button type="button" class="bottom-nav-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>Admin</span>
+              </button>
+            </nav>
+          </div>
+
+          <!-- Phone 2: Clean Mobile Google OAuth Login (Single-Screen, Zero Scroll) -->
+          <div class="phone-frame" style="justify-content:center;gap:18px;background:#ffffff;">
+            <div style="text-align:center;">
+              <div class="logo-pair" style="display:inline-flex;margin-bottom:14px;">
+                <img
+                  src="./sci-voting-portal/public/logos/aiu-logo.png"
+                  onerror="if(!this.dataset.f){this.dataset.f=1;this.src='./logos/aiu-logo.png';}"
+                  alt="AIU"
+                />
+                <span class="logo-sep"></span>
+                <img
+                  src="./sci-voting-portal/public/logos/sci-logo.png"
+                  onerror="if(!this.dataset.f){this.dataset.f=1;this.src='./logos/sci-logo.png';}"
+                  alt="SCI"
+                />
+              </div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--emerald-dark);">
+                School of Computing &amp; Informatics
+              </div>
+              <h3 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;margin-top:4px;">
+                Your Voice, Your Vote.
+              </h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
+                Sign in with your university Google account to vote or submit a candidate request.
+              </p>
+            </div>
+
+            <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+              <button type="button" class="google-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.5 3.9-5.4 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.5 14.6 2.5 12 2.5 6.8 2.5 2.5 6.8 2.5 12s4.3 9.5 9.5 9.5c5.5 0 9.1-3.9 9.1-9.3 0-.6-.1-1.1-.2-1.6H12z"/>
+                </svg>
+                <span>Continue with Google</span>
+              </button>
+              <div style="font-size:11px;color:var(--text-muted);text-align:center;">
+                Restricted to <span class="font-mono">@student.aiu.edu.my</span> accounts
+              </div>
+            </div>
+
+            <div style="text-align:center;">
+              <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">
+                Just browsing? View Candidates or Live Results without signing in.
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION B: Home Page Minimal Cards & 4-Step Phase Bar -->
+      <section id="sec-home" class="section-block">
+        <div class="section-label">
+          <h2>B. Home Page Components</h2>
+          <span>Monochrome + Emerald only (no yellow/blue/purple boxes, no static schedule table)</span>
+        </div>
+
+        <div class="hero-box">
+          <div class="live-indicator-chip">
+            <span class="status-dot live js-live-dot"></span>
+            <span class="js-live-status-text">Voting Live</span>
+          </div>
+          <h1 class="hero-title">SCI TOP COMMITTEE ELECTION 2026/2027</h1>
+          <p class="hero-sub">
+            School of Computing and Informatics, Albukhary International University
+          </p>
+        </div>
+
+        <!-- 3 Minimal Quick Actions -->
+        <div class="grid-3">
+          <div class="card card-hover action-card">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <span class="icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                </span>
+                <span class="status-dot live js-live-dot"></span>
+              </div>
+              <h3 style="font-size:15px;font-weight:700;">Vote Now</h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                Select up to 4 verified contestants.
+              </p>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--emerald-dark);">Open Ballot -&gt;</span>
+          </div>
+
+          <div class="card card-hover action-card">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <span class="icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                  </svg>
+                </span>
+                <span class="spec-pill">10 / 15</span>
+              </div>
+              <h3 style="font-size:15px;font-weight:700;">Become a Candidate</h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                Submit nomination profile for admin verification.
+              </p>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--emerald-dark);">Start Application -&gt;</span>
+          </div>
+
+          <div class="card card-hover action-card">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <span class="icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 3v18h18" />
+                    <path d="M18 17V9" />
+                    <path d="M13 17V5" />
+                    <path d="M8 17v-3" />
+                  </svg>
+                </span>
+                <span class="spec-pill">Auto-Sync</span>
+              </div>
+              <h3 style="font-size:15px;font-weight:700;">Live Results</h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                Auto-updating vote tallies open to everyone.
+              </p>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--emerald-dark);">View Standings -&gt;</span>
+          </div>
+        </div>
+
+        <!-- 3 Minimal Live Stats -->
+        <div class="grid-3">
+          <div class="card stat-card">
+            <div>
+              <div class="stat-val">312</div>
+              <div class="stat-label">Registered Voters</div>
+            </div>
+            <span class="icon-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
+          </div>
+          <div class="card stat-card">
+            <div>
+              <div class="stat-val">15</div>
+              <div class="stat-label">Active Candidates</div>
+            </div>
+            <span class="icon-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3 6 6 1-4.5 4.3 1.1 6.2L12 16.5 6.4 19.5l1.1-6.2L3 9l6-1z" />
+              </svg>
+            </span>
+          </div>
+          <div class="card stat-card">
+            <div>
+              <div class="stat-val">90.4%</div>
+              <div class="stat-label">Voter Turnout</div>
+            </div>
+            <span class="icon-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Bottom Minimal 4-Step Phase Progress Bar -->
+        <div class="card phase-bar" id="phaseBar">
+          <div class="phase-step" data-step="0">
+            <span class="phase-step-num">STEP 01</span>
+            <span class="phase-step-name">Nominations</span>
+            <span class="phase-step-note">Applications open</span>
+          </div>
+          <div class="phase-step" data-step="1">
+            <span class="phase-step-num">STEP 02</span>
+            <span class="phase-step-name">Campaign</span>
+            <span class="phase-step-note">Profile edits open</span>
+          </div>
+          <div class="phase-step active" data-step="2">
+            <span class="phase-step-num">STEP 03</span>
+            <span class="phase-step-name">Voting Live</span>
+            <span class="phase-step-note">Edits locked automatically</span>
+          </div>
+          <div class="phase-step" data-step="3">
+            <span class="phase-step-num">STEP 04</span>
+            <span class="phase-step-name">Ended</span>
+            <span class="phase-step-note">Final Top 8 standings</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION C: 6-Field Candidate Cards + Interactive Floating Ballot Tray -->
+      <section id="sec-candidates" class="section-block">
+        <div class="section-label">
+          <h2>C. 6-Field Candidate Cards &amp; Interactive Ballot Selection</h2>
+          <span>Click any card below to test the selection border &amp; floating ballot bar</span>
+        </div>
+
+        <div class="grid-3" id="candidatePreviewGrid">
+          <div class="card card-hover candidate-card selected" data-cand="1">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                <div class="avatar-badge">MH</div>
+                <div style="min-width:0;">
+                  <div style="font-size:14px;font-weight:700;">Muhammad Hasnat Anwar</div>
+                  <div style="font-size:11px;color:var(--text-muted);" class="font-mono">
+                    hasnat.anwar@student.aiu.edu.my
+                  </div>
+                </div>
+              </div>
+              <span class="select-circle">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            </div>
+            <div class="meta-list">
+              <span>Computer Science</span>
+              <span>Pakistan</span>
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border);padding-top:10px;">
+              Transparent event coordination, peer coding clinics, and accessible feedback loops.
+            </p>
+          </div>
+
+          <div class="card card-hover candidate-card" data-cand="2">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                <div class="avatar-badge">NJ</div>
+                <div style="min-width:0;">
+                  <div style="font-size:14px;font-weight:700;">Nur Jumairah Binti Shaffri</div>
+                  <div style="font-size:11px;color:var(--text-muted);" class="font-mono">
+                    nur.jumairah@student.aiu.edu.my
+                  </div>
+                </div>
+              </div>
+              <span class="select-circle">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            </div>
+            <div class="meta-list">
+              <span>Computer Science</span>
+              <span>Malaysia</span>
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border);padding-top:10px;">
+              Clearer student communication, alumni mentorship circles, and industry prep digests.
+            </p>
+          </div>
+
+          <div class="card card-hover candidate-card" data-cand="3">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                <div class="avatar-badge">HB</div>
+                <div style="min-width:0;">
+                  <div style="font-size:14px;font-weight:700;">Hamdha Banu Ainudeen</div>
+                  <div style="font-size:11px;color:var(--text-muted);" class="font-mono">
+                    hamdha.banu@student.aiu.edu.my
+                  </div>
+                </div>
+              </div>
+              <span class="select-circle">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            </div>
+            <div class="meta-list">
+              <span>Data Science</span>
+              <span>Sri Lanka</span>
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border);padding-top:10px;">
+              Structured midterm study jams, shared revision banks, and cohort peer support.
+            </p>
+          </div>
+        </div>
+
+        <div class="floating-ballot">
+          <div style="font-size:12px;">
+            <strong>Ballot Selection:</strong>
+            <span id="ballotCountText" class="font-mono" style="color:var(--emerald);">1 / 4 selected</span>
+          </div>
+          <button type="button" class="btn-primary">Review &amp; Submit Vote -&gt;</button>
+        </div>
+      </section>
+
+      <!-- SECTION D: Minimal Live Results (Ranks #1-8 Normal, #9+ Dimmed, Zero Extra Tags/Cutoff Lines) -->
+      <section id="sec-results" class="section-block">
+        <div class="section-label">
+          <h2>D. Minimal Live Results Rankings</h2>
+          <span>Top 8 stay sharp; #9+ subtly grayed out without badges, percentage clutter, or cutoff lines</span>
+        </div>
+
+        <div class="card" style="padding:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="status-dot live js-live-dot"></span>
+              <strong style="font-size:15px;">Candidate Standings</strong>
+            </div>
+            <span class="spec-pill">Auto-updating</span>
+          </div>
+
+          <div class="results-list">
+            <div class="card result-row">
+              <div class="result-top">
+                <div class="result-left">
+                  <span class="rank-num">#1</span>
+                  <div class="avatar-badge" style="width:42px;height:42px;font-size:14px;">MH</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;">Muhammad Hasnat Anwar</div>
+                    <div style="font-size:12px;color:var(--text-muted);">Computer Science - Pakistan</div>
+                  </div>
+                </div>
+                <div class="vote-tally">138 <small>votes</small></div>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
+            </div>
+
+            <div class="card result-row">
+              <div class="result-top">
+                <div class="result-left">
+                  <span class="rank-num">#2</span>
+                  <div class="avatar-badge" style="width:42px;height:42px;font-size:14px;">NJ</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;">Nur Jumairah Binti Shaffri</div>
+                    <div style="font-size:12px;color:var(--text-muted);">Computer Science - Malaysia</div>
+                  </div>
+                </div>
+                <div class="vote-tally">129 <small>votes</small></div>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:93%;"></div></div>
+            </div>
+
+            <div class="card result-row">
+              <div class="result-top">
+                <div class="result-left">
+                  <span class="rank-num">#8</span>
+                  <div class="avatar-badge" style="width:42px;height:42px;font-size:14px;">LA</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;">Liyana Afifah Binti Amirudin</div>
+                    <div style="font-size:12px;color:var(--text-muted);">Computer Science - Malaysia</div>
+                  </div>
+                </div>
+                <div class="vote-tally">82 <small>votes</small></div>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:59%;"></div></div>
+            </div>
+
+            <div class="card result-row dimmed">
+              <div class="result-top">
+                <div class="result-left">
+                  <span class="rank-num">#9</span>
+                  <div class="avatar-badge" style="width:42px;height:42px;font-size:14px;">SB</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;">Sankumba Balajo</div>
+                    <div style="font-size:12px;color:var(--text-muted);">IT Cybersecurity - Gambia</div>
+                  </div>
+                </div>
+                <div class="vote-tally">69 <small>votes</small></div>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:50%;"></div></div>
+            </div>
+
+            <div class="card result-row dimmed">
+              <div class="result-top">
+                <div class="result-left">
+                  <span class="rank-num">#10</span>
+                  <div class="avatar-badge" style="width:42px;height:42px;font-size:14px;">AS</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700;">Abdullah Safras Ahamed</div>
+                    <div style="font-size:12px;color:var(--text-muted);">Data Science - Sri Lanka</div>
+                  </div>
+                </div>
+                <div class="vote-tally">57 <small>votes</small></div>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:41%;"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION E: Cohort 4 "Aura Farming" Senior Tribute & Lab Voting Kiosk -->
+      <section class="section-block">
+        <div class="section-label">
+          <h2>E. Cohort 4 Senior Tribute &amp; SCI Lab Physical Booth</h2>
+          <span>Verified against Google OAuth + Excel Roster (C4 Tribute vs C5-C7 Voter)</span>
+        </div>
+
+        <div class="split-2">
+          <!-- Cohort 4 Tribute Card -->
+          <div class="card" style="padding:26px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="width:58px;height:58px;border-radius:16px;background:var(--emerald-soft);border:1px solid var(--emerald-border);display:flex;align-items:center;justify-content:center;color:var(--emerald-dark);">
+              <!-- Clean SVG Blossom / Laurel Emblem -->
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 7.5a4.5 4.5 0 1 1 4.5 4.5M12 7.5A4.5 4.5 0 1 0 7.5 12M12 7.5V9m-4.5 3a4.5 4.5 0 1 0 4.5 4.5M7.5 12H9m7.5 0a4.5 4.5 0 1 1-4.5 4.5m4.5-4.5H15m-3 4.5V15" />
+                <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+              </svg>
+            </div>
+            <span class="spec-pill">COHORT 4 RECOGNIZED</span>
+            <h3 style="font-size:18px;font-weight:800;">
+              Congratulations, Abdullahi Mohamed Ali
+            </h3>
+            <p style="font-size:12px;color:var(--text-secondary);max-width:340px;">
+              We see you from <strong class="font-mono">AIU22102225</strong> (Cohort 4 - Data
+              Science). Voting is reserved for Cohorts 5, 6, and 7, but SCI sincerely appreciates
+              your journey and wishes you every success ahead in your graduation. We will miss you.
+            </p>
+            <button type="button" class="btn-outline" style="margin-top:4px;">
+              View Live Results &amp; Candidates -&gt;
+            </button>
+          </div>
+
+          <!-- Physical Lab Booth Check-In Card -->
+          <div class="card" style="padding:24px;display:flex;flex-direction:column;justify-content:space-between;gap:14px;">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <span style="font-size:14px;font-weight:800;">SCI Lab Voting Booth Mode</span>
+                <span class="spec-pill">Admin Lock</span>
+              </div>
+              <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
+                Check in walk-in or new C7 students at the SCI lab, then lock screen into an
+                anonymous student ballot.
+              </p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">
+                <div style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-page);">
+                  <div style="color:var(--text-muted);">Mandatory</div>
+                  <div style="font-weight:700;">Full Name, Cohort, Program, Country</div>
+                </div>
+                <div style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-page);">
+                  <div style="color:var(--text-muted);">Optional (C7)</div>
+                  <div style="font-weight:700;">Student ID &amp; Student Email</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:12px;">
+              <span style="font-size:11px;color:var(--text-muted);" class="font-mono">
+                4-digit Admin PIN unlock
+              </span>
+              <button type="button" class="btn-primary">Start Student Ballot -&gt;</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const toggleBtn = document.getElementById('toggleLiveDotBtn');
+      const toolbarDot = document.getElementById('toolbarDot');
+      const toolbarDotText = document.getElementById('toolbarDotText');
+      const phaseBtns = document.querySelectorAll('[data-phase-btn]');
+      const phaseSteps = document.querySelectorAll('.phase-step');
+
+      let isLive = true;
+
+      function syncLiveDotState(live) {
+        isLive = live;
+        toggleBtn.classList.toggle('active', live);
+        toolbarDot.className = `status-dot ${live ? 'live' : 'off'}`;
+        toolbarDotText.textContent = live ? 'Voting Dot: LIVE' : 'Voting Dot: OFF';
+
+        document.querySelectorAll('.js-live-dot').forEach((el) => {
+          el.classList.toggle('live', live);
+          el.classList.toggle('off', !live);
+        });
+        document.querySelectorAll('.js-live-label').forEach((el) => {
+          el.textContent = live ? 'Live' : 'Off';
+        });
+        document.querySelectorAll('.js-live-status-text').forEach((el) => {
+          el.textContent = live ? 'Voting Live' : 'Voting Closed';
+        });
+      }
+
+      toggleBtn.addEventListener('click', () => syncLiveDotState(!isLive));
+
+      phaseBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.getAttribute('data-phase-btn'));
+          phaseBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          phaseSteps.forEach((step, sIdx) => step.classList.toggle('active', sIdx === idx));
+          syncLiveDotState(idx === 2);
+        });
+      });
+
+      const candCards = document.querySelectorAll('.candidate-card');
+      const ballotCountText = document.getElementById('ballotCountText');
+      candCards.forEach((card) => {
+        card.addEventListener('click', () => {
+          card.classList.toggle('selected');
+          const count = document.querySelectorAll('.candidate-card.selected').length;
+          ballotCountText.textContent = `${count} / 4 selected`;
+        });
+      });
+    </script>
+  </body>
+</html>

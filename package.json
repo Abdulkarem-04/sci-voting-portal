@@ -1,0 +1,31 @@
+{
+  "name": "sci-voting-portal",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SCI Top Committee Election & Voting Portal 2026/2027 - Albukhary International University",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && npx --yes firebase-tools deploy --only hosting,firestore:rules",
+    "test:security": "jiti scripts/securityTests.ts",
+    "lint:emoji": "python3 -c \"import pathlib,sys,re; bad=[p for p in pathlib.Path('src').rglob('*') if p.is_file() and re.search(r'[\\U0001F300-\\U0001FAFF\\u2600-\\u27BF]', p.read_text('utf-8'))]; print('No emojis found' if not bad else f'Emoji found in: {bad}'); sys.exit(1 if bad else 0)\""
+  },
+  "dependencies": {
+    "firebase": "^11.0.2",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,168 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAiuStudent() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('^[a-zA-Z0-9._%+-]+@student\\.aiu\\.edu\\.my$');
+    }
+
+    function configExists() {
+      return exists(/databases/$(database)/documents/electionConfig/current);
+    }
+
+    function currentConfig() {
+      return get(/databases/$(database)/documents/electionConfig/current).data;
+    }
+
+    function isPrimaryAdminEmail() {
+      return isVerifiedAiuStudent()
+        && request.auth.token.email.lower() == 'ajogal.abubakar@student.aiu.edu.my';
+    }
+
+    function isListedAdminEmail() {
+      return isPrimaryAdminEmail()
+        || (
+          isVerifiedAiuStudent()
+          && configExists()
+          && currentConfig().adminEmails is list
+          && request.auth.token.email.lower() in currentConfig().adminEmails
+        );
+    }
+
+    function isAdmin() {
+      return isListedAdminEmail()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function profileEditablePhase() {
+      return !configExists() || currentConfig().currentPhase in ['NOMINATIONS', 'CAMPAIGN'];
+    }
+
+    // Public election overview readable by all visitors; writable by Admins or 1-ballot increment
+    match /electionConfig/{configId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        || isPrimaryAdminEmail()
+        || (!configExists() && isVerifiedAiuStudent());
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isVerifiedAiuStudent()
+        && currentConfig().currentPhase == 'VOTING_LIVE'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalBallotsCast', 'lastUpdatedAt'])
+        && request.resource.data.totalBallotsCast == resource.data.totalBallotsCast + 1
+      );
+    }
+
+    // Student user documents (zero ballot choices ever stored on user document)
+    match /users/{userId} {
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && isVerifiedAiuStudent()
+        && request.resource.data.hasVoted == false
+        && request.resource.data.cohort in ['C5', 'C6', 'C7']
+        && (
+          request.resource.data.role == 'voter'
+          || (request.resource.data.role == 'admin' && isListedAdminEmail())
+        );
+
+      // Single-ballot lock: student transitions hasVoted false -> true once during VOTING_LIVE
+      allow update: if isAdmin() || (
+        isVerifiedAiuStudent()
+        && request.auth.uid == userId
+        && resource.data.hasVoted == false
+        && request.resource.data.hasVoted == true
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.studentId == resource.data.studentId
+        && currentConfig().currentPhase == 'VOTING_LIVE'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasVoted', 'votedAt', 'votingChannel', 'receiptCode'])
+      );
+    }
+
+    // 1-to-1 permanent binding between verified Google UID and AIU Student ID
+    match /studentLocks/{studentId} {
+      allow get: if isVerifiedAiuStudent() || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isVerifiedAiuStudent()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email.lower()
+        && request.resource.data.studentId == studentId
+        && request.resource.data.hasVoted == false;
+      allow update: if isAdmin() || (
+        isVerifiedAiuStudent()
+        && resource.data.uid == request.auth.uid
+        && resource.data.hasVoted == false
+        && request.resource.data.hasVoted == true
+        && currentConfig().currentPhase == 'VOTING_LIVE'
+      );
+    }
+
+    // Public candidates collection
+    match /candidates/{candidateId} {
+      allow read: if true;
+
+      // Eligible C5/C6 students or Admins may create before Voting Live starts
+      allow create: if profileEditablePhase() && (
+        isAdmin() || (
+          isVerifiedAiuStudent()
+          && request.resource.data.status == 'pending'
+          && request.resource.data.votes == 0
+          && request.resource.data.cohort in ['C5', 'C6']
+          && request.resource.data.email == request.auth.token.email.lower()
+          && request.resource.data.studentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentId
+        )
+      );
+
+      allow update: if
+        // 1) Candidate self-edit or Admin profile edit (strictly locked in VOTING_LIVE / ENDED)
+        (
+          profileEditablePhase()
+          && (
+            isAdmin() || (
+              isVerifiedAiuStudent()
+              && resource.data.status == 'approved'
+              && resource.data.studentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentId
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'country', 'manifesto', 'photoUrl', 'updatedAt'])
+            )
+          )
+        )
+        // 2) Admin status / post-interview role assignment
+        || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'appointedRole', 'updatedAt'])
+        )
+        // 3) Verified voter ballot increment (+1) during VOTING_LIVE
+        || (
+          isVerifiedAiuStudent()
+          && resource.data.status == 'approved'
+          && currentConfig().currentPhase == 'VOTING_LIVE'
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hasVoted == false
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes'])
+          && request.resource.data.votes == resource.data.votes + 1
+        );
+
+      allow delete: if isAdmin() && profileEditablePhase();
+    }
+
+    // Cohort 4 Senior Graduation Visits tracker
+    match /c4Visits/{visitId} {
+      allow create, update: if isVerifiedAiuStudent();
+      allow read, delete: if isAdmin();
+    }
+
+    // Security & Operations Audit Log
+    match /auditLogs/{logId} {
+      allow create: if isVerifiedAiuStudent() || isAdmin();
+      allow read: if isAdmin();
+    }
+  }
+}
