@@ -112,11 +112,12 @@ export const ResultsView: React.FC = () => {
         </div>
       )}
 
-      {/* Refined Candidate Standings List (No bottom progress bar, larger photo, in-card SVG design, #9+ dimmed) */}
+      {/* Candidate Standings List (No bottom progress bar, larger photo, in-card SVG design, dynamic Dean cutoff) */}
       <div className="space-y-3">
         {rankedCandidates.map((cand, idx) => {
           const rank = idx + 1;
-          const isShortlist = rank <= config.topAdvancingCount;
+          const hasCutoff = Boolean(config.topAdvancingCount && config.topAdvancingCount > 0);
+          const isShortlist = !hasCutoff || rank <= (config.topAdvancingCount ?? 0);
 
           return (
             <div

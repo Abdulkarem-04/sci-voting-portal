@@ -108,9 +108,8 @@ export interface ElectionConfig {
   subtitle: string;
   academicSession: string;
   currentPhase: ElectionPhase;
-  maxApprovedCandidates: number; // 15 max candidates
   maxVotesPerBallot: number; // 4 selections max per voter
-  topAdvancingCount: number; // Top 8 advance to interviews
+  topAdvancingCount: number | null; // null = Undecided / Show All; number = Dean cutoff (e.g. 8 or 13)
   liveResultsPublic: boolean;
   votingDateDisplay: string;
   votingWindowDisplay: string;
@@ -153,6 +152,16 @@ export interface AuthRosterInput {
 export interface AuthRosterResponse {
   user?: UserProfile;
   c4Senior?: RosterStudent;
+}
+
+export interface AdminUpdateUserInput {
+  fullName: string;
+  studentId: string;
+  cohort: VotingCohortCode;
+  yearOfStudy: 1 | 2 | 3;
+  program: ProgramOfStudy;
+  country: string;
+  role: UserRole;
 }
 
 export interface ActionResult<T = void> {

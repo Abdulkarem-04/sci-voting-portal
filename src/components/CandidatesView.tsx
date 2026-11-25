@@ -11,7 +11,7 @@ import {
   Vote,
   X,
 } from 'lucide-react';
-import { SCI_PROGRAMS } from '../data/seedData';
+import { isOfficialShortlistedNominee, SCI_PROGRAMS } from '../data/seedData';
 import { useElection } from '../services/electionContext';
 import { Candidate, ProgramOfStudy } from '../types/election';
 import { shortProgramLabel } from '../utils/imageUtils';
@@ -22,6 +22,7 @@ export const CandidatesView: React.FC = () => {
     dbState,
     approvedCandidates,
     currentUser,
+    myCandidateProfile,
     isProfileLocked,
     navigateProtected,
     openApplicationModal,
@@ -47,7 +48,9 @@ export const CandidatesView: React.FC = () => {
   }, [approvedCandidates, programFilter, query]);
 
   const isVotingLive = dbState.config.currentPhase === 'VOTING_LIVE';
-  const maxReached = approvedCandidates.length >= dbState.config.maxApprovedCandidates;
+  const canSelfApply =
+    !isProfileLocked &&
+    (!currentUser || (isOfficialShortlistedNominee(currentUser.studentId) && !myCandidateProfile));
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-24 sm:pb-12 space-y-7">
@@ -55,9 +58,7 @@ export const CandidatesView: React.FC = () => {
       <div className="text-center max-w-2xl mx-auto space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-600 font-mono">
           <Users className="w-3.5 h-3.5 text-emerald-600" />
-          <span>
-            {approvedCandidates.length} / {dbState.config.maxApprovedCandidates} Contestants
-          </span>
+          <span>{approvedCandidates.length} Official Contestants</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-950 tracking-tight">
           All Candidates
@@ -67,7 +68,7 @@ export const CandidatesView: React.FC = () => {
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-          {!isProfileLocked && !maxReached && (
+          {canSelfApply && (
             <button
               type="button"
               onClick={openApplicationModal}
@@ -267,7 +268,7 @@ export const CandidatesView: React.FC = () => {
             <div className="relative z-10 p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3 text-xs bg-zinc-50 rounded-xl p-3.5 border border-zinc-200">
                 <div>
-                  <div className="text-zinc-400">Country</div>
+                  <div className="text-zinc-400">Nationality</div>
                   <div className="font-bold text-zinc-900 mt-0.5">
                     {selectedCandidate.country}
                   </div>

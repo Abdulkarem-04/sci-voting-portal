@@ -1,8 +1,13 @@
 import { findRosterStudent } from '../data/cohortRoster';
 import { verifyEmailMatchesRosterStudent } from '../data/cohortRoster';
-import { createInitialSeedState, PRIMARY_ADMIN_EMAIL } from '../data/seedData';
+import {
+  createInitialSeedState,
+  isOfficialShortlistedNominee,
+  PRIMARY_ADMIN_EMAIL,
+} from '../data/seedData';
 import {
   ActionResult,
+  AdminUpdateUserInput,
   AuditLogEntry,
   AuthRosterInput,
   AuthRosterResponse,
@@ -185,7 +190,7 @@ export function localAuthenticateWithRoster(
   const email = params.email.trim().toLowerCase();
   const googleDisplayName = sanitizeText(params.googleDisplayName || '', 120);
   const studentId = normalizeAiuStudentId(params.studentIdInput);
-  const country = sanitizeText(params.country || 'Malaysia', 64) || 'Malaysia';
+  const country = sanitizeText(params.country || '', 64);
 
   if (!isValidAiuEmail(email)) {
     return {
@@ -270,6 +275,13 @@ export function localAuthenticateWithRoster(
         message: `Congratulations on graduating, ${rosterStudent.fullName}. SCI Cohort 4 seniors are honored but not eligible to vote.`,
         data: { c4Senior: rosterStudent },
       },
+    };
+  }
+
+  if (!country) {
+    return {
+      nextState: state,
+      result: { ok: false, message: 'Please select your nationality.' },
     };
   }
 
@@ -729,14 +741,27 @@ export function localSubmitCandidateApplication(
     };
   }
 
-  const approvedCount = state.candidates.filter((c) => c.status === 'approved').length;
-  if (approvedCount >= state.config.maxApprovedCandidates) {
+  const isAdminDirectAdd =
+    actor.role === 'admin' && initialStatus === 'approved' && Boolean(input.targetStudentId);
+
+  if (!isAdminDirectAdd && !isOfficialShortlistedNominee(targetStudentId)) {
     return {
       nextState: state,
       result: {
         ok: false,
-        message: `Maximum limit of ${state.config.maxApprovedCandidates} approved contestants reached.`,
+        message: 'Only the 26 officially announced SCI nominees are eligible to submit a candidate application.',
       },
+    };
+  }
+
+  const cleanCountry = sanitizeText(
+    input.country || (!isAdminDirectAdd ? actor.country : '') || '',
+    64
+  );
+  if (!cleanCountry) {
+    return {
+      nextState: state,
+      result: { ok: false, message: 'Please select candidate nationality.' },
     };
   }
 
@@ -758,7 +783,6 @@ export function localSubmitCandidateApplication(
   const next = cloneState(state);
   const maxNum = next.candidates.reduce((acc, c) => Math.max(acc, c.candidateNumber), 0);
   const nowIso = new Date().toISOString();
-  const cleanCountry = sanitizeText(input.country || actor.country || 'Malaysia', 64) || 'Malaysia';
   const cleanManifesto = sanitizeText(input.manifesto || '', 1200);
   const avatarTag = `${shortProgramLabel(targetProgram).slice(0, 3).toUpperCase()} Y${targetYear}`;
 
@@ -816,19 +840,6 @@ export function localSetCandidateStatus(
   const idx = state.candidates.findIndex((c) => c.id === candidateId);
   if (idx === -1) {
     return { nextState: state, result: { ok: false, message: 'Candidate not found.' } };
-  }
-
-  const approvedCount = state.candidates.filter(
-    (c) => c.status === 'approved' && c.id !== candidateId
-  ).length;
-  if (status === 'approved' && approvedCount >= state.config.maxApprovedCandidates) {
-    return {
-      nextState: state,
-      result: {
-        ok: false,
-        message: `Cannot approve: maximum limit of ${state.config.maxApprovedCandidates} approved contestants reached.`,
-      },
-    };
   }
 
   const next = cloneState(state);
@@ -1009,7 +1020,12 @@ export function localDeleteCandidate(
 export function localUpdateConfig(
   state: ElectionDatabaseState,
   actor: UserProfile,
-  partial: Partial<Pick<ElectionConfig, 'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin'>>
+  partial: Partial<
+    Pick<
+      ElectionConfig,
+      'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+    >
+  >
 ): { nextState: ElectionDatabaseState; result: ActionResult } {
   if (actor.role !== 'admin') {
     return { nextState: state, result: { ok: false, message: 'Admin permission required.' } };
@@ -1018,6 +1034,19 @@ export function localUpdateConfig(
     return {
       nextState: state,
       result: { ok: false, message: 'Lab Booth Admin PIN must be exactly 4 digits.' },
+    };
+  }
+  if (
+    partial.topAdvancingCount !== undefined &&
+    partial.topAdvancingCount !== null &&
+    (!Number.isInteger(partial.topAdvancingCount) || partial.topAdvancingCount < 1)
+  ) {
+    return {
+      nextState: state,
+      result: {
+        ok: false,
+        message: 'Interview shortlist cutoff must be a positive whole number or set to Undecided.',
+      },
     };
   }
   const next = cloneState(state);
@@ -1030,11 +1059,123 @@ export function localUpdateConfig(
     next,
     actor,
     'ELECTION_CONFIG_UPDATED',
-    `Updated election state (Phase: ${next.config.currentPhase}, Results: ${next.config.liveResultsPublic ? 'Public' : 'Hidden'}).`
+    `Updated election state (Phase: ${next.config.currentPhase}, Results: ${next.config.liveResultsPublic ? 'Public' : 'Hidden'}, Cutoff: ${next.config.topAdvancingCount ?? 'Undecided'}).`
   );
 
   saveLocalDatabase(next);
   return { nextState: next, result: { ok: true, message: 'Election settings updated.' } };
+}
+
+export function localAdminUpdateUser(
+  state: ElectionDatabaseState,
+  adminActor: UserProfile,
+  targetUid: string,
+  updates: AdminUpdateUserInput
+): { nextState: ElectionDatabaseState; result: ActionResult<UserProfile> } {
+  if (adminActor.role !== 'admin') {
+    return { nextState: state, result: { ok: false, message: 'Admin permission required.' } };
+  }
+  const existing = state.users[targetUid];
+  if (!existing) {
+    return { nextState: state, result: { ok: false, message: 'Registered user not found.' } };
+  }
+
+  const cleanName = sanitizeText(updates.fullName, 120);
+  const cleanStudentId = normalizeAiuStudentId(updates.studentId);
+  const cleanCountry = sanitizeText(updates.country, 64);
+
+  if (cleanName.length < 2) {
+    return { nextState: state, result: { ok: false, message: 'Full name must be at least 2 characters.' } };
+  }
+  if (!/^AIU\d{7,10}$/.test(cleanStudentId)) {
+    return {
+      nextState: state,
+      result: { ok: false, message: 'Enter a valid AIU Student ID (e.g. AIU24102323).' },
+    };
+  }
+  if (updates.cohort !== 'C5' && updates.cohort !== 'C6' && updates.cohort !== 'C7') {
+    return { nextState: state, result: { ok: false, message: 'Cohort must be C5, C6, or C7.' } };
+  }
+  if (updates.yearOfStudy !== 1 && updates.yearOfStudy !== 2 && updates.yearOfStudy !== 3) {
+    return { nextState: state, result: { ok: false, message: 'Year of study must be 1, 2, or 3.' } };
+  }
+  if (!cleanCountry) {
+    return { nextState: state, result: { ok: false, message: 'Nationality is required.' } };
+  }
+  if (updates.role !== 'voter' && updates.role !== 'admin') {
+    return { nextState: state, result: { ok: false, message: 'Invalid user role.' } };
+  }
+  if (
+    existing.email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase() &&
+    updates.role !== 'admin'
+  ) {
+    return {
+      nextState: state,
+      result: { ok: false, message: 'Primary Tech Lead admin cannot be demoted to voter.' },
+    };
+  }
+  if (cleanStudentId !== existing.studentId && existing.hasVoted) {
+    return {
+      nextState: state,
+      result: {
+        ok: false,
+        message: 'Cannot change Student ID after a user has already cast a ballot.',
+      },
+    };
+  }
+  const claimedByOther = Object.values(state.users).find(
+    (u) => u.uid !== targetUid && u.studentId.toUpperCase() === cleanStudentId.toUpperCase()
+  );
+  if (claimedByOther) {
+    return {
+      nextState: state,
+      result: {
+        ok: false,
+        message: `Student ID ${cleanStudentId} is already bound to ${claimedByOther.fullName}.`,
+      },
+    };
+  }
+
+  const next = cloneState(state);
+  const updatedUser: UserProfile = {
+    ...existing,
+    fullName: cleanName,
+    studentId: cleanStudentId,
+    cohort: updates.cohort,
+    yearOfStudy: updates.yearOfStudy,
+    program: updates.program,
+    country: cleanCountry,
+    role: updates.role,
+    // Strictly preserve voting state & receipt untouched
+    hasVoted: existing.hasVoted,
+    votedAt: existing.votedAt,
+    votingChannel: existing.votingChannel,
+    receiptCode: existing.receiptCode,
+  };
+  next.users[targetUid] = updatedUser;
+
+  const userEmailLower = existing.email.toLowerCase();
+  const adminSet = new Set(next.config.adminEmails.map((e) => e.toLowerCase()));
+  if (updates.role === 'admin') {
+    adminSet.add(userEmailLower);
+  } else if (userEmailLower !== PRIMARY_ADMIN_EMAIL.toLowerCase()) {
+    adminSet.delete(userEmailLower);
+  }
+  next.config.adminEmails = Array.from(adminSet);
+  next.config.lastUpdatedAt = new Date().toISOString();
+
+  next.auditLogs = appendAuditLog(
+    next,
+    adminActor,
+    'ADMIN_USER_UPDATED',
+    `Updated user ${updatedUser.fullName} (${updatedUser.studentId}, ${updatedUser.country}, role: ${updatedUser.role}). Ballot status untouched.`
+  );
+
+  saveLocalDatabase(next);
+  return {
+    nextState: next,
+    result: { ok: true, message: `Updated profile for ${updatedUser.fullName}.`, data: updatedUser },
+  };
 }
 
 export function localUpdatePhase(

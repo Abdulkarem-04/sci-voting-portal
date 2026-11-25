@@ -33,7 +33,7 @@ export const AuthView: React.FC = () => {
 
   const [demoEmail, setDemoEmail] = useState('abeddin.mosawi@student.aiu.edu.my');
   const [studentIdInput, setStudentIdInput] = useState('');
-  const [country, setCountry] = useState('Malaysia');
+  const [country, setCountry] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(
     null
@@ -333,19 +333,26 @@ export const AuthView: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-                  Country
+                  Nationality
                 </label>
                 <select
+                  required
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
+                  <option value="" disabled>
+                    -- Select your nationality --
+                  </option>
                   {AIU_COUNTRIES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Select your nationality / citizenship (not your study location).
+                </p>
               </div>
 
               <div className="flex items-center gap-2 pt-1">

@@ -6,6 +6,7 @@ import {
 } from 'firebase/auth';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -18,7 +19,11 @@ import {
   findRosterStudent,
   verifyEmailMatchesRosterStudent,
 } from '../data/cohortRoster';
-import { createInitialSeedState } from '../data/seedData';
+import {
+  createInitialSeedState,
+  isOfficialShortlistedNominee,
+  PRIMARY_ADMIN_EMAIL,
+} from '../data/seedData';
 import {
   firebaseAuth,
   firebaseDb,
@@ -28,6 +33,8 @@ import {
 import {
   ActionResult,
   ActiveTab,
+  AdminUpdateUserInput,
+  AuditLogEntry,
   AuthRosterResponse,
   C4VisitEntry,
   Candidate,
@@ -41,6 +48,7 @@ import {
   RosterStudent,
   TopCommitteeRole,
   UserProfile,
+  UserRole,
 } from '../types/election';
 import {
   generateSvgAvatarDataUrl,
@@ -55,6 +63,7 @@ import {
   getSavedSessionUid,
   isProfileEditLockedPhase,
   loadLocalDatabase,
+  localAdminUpdateUser,
   localAssignTopCommitteeRole,
   localAuthenticateWithRoster,
   localCastBallot,
@@ -140,9 +149,15 @@ interface ElectionContextValue {
   deleteCandidate: (id: string) => Promise<ActionResult>;
   updateElectionPhase: (phase: ElectionPhase) => Promise<ActionResult>;
   updateElectionConfig: (
-    partial: Partial<Pick<ElectionConfig, 'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin'>>
+    partial: Partial<
+      Pick<
+        ElectionConfig,
+        'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+      >
+    >
   ) => Promise<ActionResult>;
   manageAdminEmails: (action: 'add' | 'remove', email: string) => Promise<ActionResult<string[]>>;
+  adminUpdateUser: (targetUid: string, updates: AdminUpdateUserInput) => Promise<ActionResult<UserProfile>>;
   labBoothSession: LabBoothSession;
   startLabBoothSession: (checkIn: LabBoothCheckInInput) => ActionResult;
   submitLabBoothBallot: (candidateIds: string[]) => Promise<ActionResult<{ receiptCode: string }>>;
@@ -334,10 +349,48 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const currentUser = useMemo<UserProfile | null>(() => {
-    if (isFirebaseConfigured) return firebaseUser;
-    if (!currentUserUid) return null;
-    return dbState.users[currentUserUid] ?? null;
-  }, [currentUserUid, dbState.users, firebaseUser]);
+    const baseUser = isFirebaseConfigured
+      ? firebaseUser
+      : currentUserUid
+        ? dbState.users[currentUserUid] ?? null
+        : null;
+    if (!baseUser) return null;
+
+    const emailLower = baseUser.email.toLowerCase();
+    const listedAdmin =
+      emailLower === PRIMARY_ADMIN_EMAIL.toLowerCase() ||
+      dbState.config.adminEmails.map((e) => e.toLowerCase()).includes(emailLower);
+    const effectiveRole: UserRole = listedAdmin ? 'admin' : 'voter';
+    const votedInConfig =
+      dbState.config.votedStudentIds.includes(baseUser.studentId) ||
+      dbState.config.votedFullNames.includes(
+        normalizeFullNameKey(baseUser.fullName, baseUser.cohort)
+      );
+    const effectiveHasVoted = baseUser.hasVoted || votedInConfig;
+    const effectiveChannel =
+      baseUser.votingChannel ?? (votedInConfig ? 'lab_booth' : null);
+
+    if (
+      baseUser.role === effectiveRole &&
+      baseUser.hasVoted === effectiveHasVoted &&
+      baseUser.votingChannel === effectiveChannel
+    ) {
+      return baseUser;
+    }
+    return {
+      ...baseUser,
+      role: effectiveRole,
+      hasVoted: effectiveHasVoted,
+      votingChannel: effectiveChannel,
+    };
+  }, [
+    currentUserUid,
+    dbState.config.adminEmails,
+    dbState.config.votedFullNames,
+    dbState.config.votedStudentIds,
+    dbState.users,
+    firebaseUser,
+  ]);
 
   const approvedCandidates = useMemo(
     () =>
@@ -375,7 +428,17 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const isAdmin = Boolean(currentUser && currentUser.role === 'admin');
 
-  // Admin-only live subscriptions for C4 visits & audit logs in Firebase mode
+  // Auto-sync promoted user role document cleanly in Firestore when listed in adminEmails
+  useEffect(() => {
+    if (!isFirebaseConfigured || !firebaseDb || !firebaseUser || !currentUser) return;
+    if (firebaseUser.role !== currentUser.role && currentUser.role === 'admin') {
+      updateDoc(doc(firebaseDb, 'users', currentUser.uid), {
+        role: 'admin',
+      }).catch(() => {});
+    }
+  }, [currentUser, firebaseUser]);
+
+  // Admin-only live subscriptions for C4 visits, registered users, and audit logs in Firebase mode
   useEffect(() => {
     if (!isFirebaseConfigured || !firebaseDb || !isAdmin) return;
     const db = firebaseDb;
@@ -391,8 +454,36 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Ignore if admin privileges or rules are still loading
       }
     );
+    const unsubUsers = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const userMap: Record<string, UserProfile> = {};
+        snap.docs.forEach((d) => {
+          const u = d.data() as UserProfile;
+          userMap[d.id] = { ...u, uid: u.uid || d.id };
+        });
+        setDbState((prev) => ({ ...prev, users: userMap }));
+      },
+      () => {
+        // Ignore if admin privileges or rules are still loading
+      }
+    );
+    const unsubLogs = onSnapshot(
+      collection(db, 'auditLogs'),
+      (snap) => {
+        const logs = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<AuditLogEntry, 'id'>) }))
+          .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        setDbState((prev) => ({ ...prev, auditLogs: logs }));
+      },
+      () => {
+        // Ignore if admin privileges or rules are still loading
+      }
+    );
     return () => {
       unsubVisits();
+      unsubUsers();
+      unsubLogs();
     };
   }, [isAdmin]);
   const isProfileLocked = isProfileEditLockedPhase(dbState.config.currentPhase);
@@ -613,20 +704,26 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           };
         }
 
+        const cleanCountry = sanitizeText(country || '', 64);
+        if (!cleanCountry) {
+          return { ok: false, message: 'Please select your nationality.' };
+        }
+
         try {
-          const isConfiguredAdmin = dbState.config.adminEmails
-            .map((e) => e.toLowerCase())
-            .includes(pendingGoogleAccount.email.toLowerCase());
+          const emailLower = pendingGoogleAccount.email.toLowerCase();
+          const isConfiguredAdmin =
+            emailLower === PRIMARY_ADMIN_EMAIL.toLowerCase() ||
+            dbState.config.adminEmails.map((e) => e.toLowerCase()).includes(emailLower);
           const nowIso = new Date().toISOString();
           const newProfile: UserProfile = {
             uid: pendingGoogleAccount.uid,
             fullName: rosterStudent.fullName,
             studentId: rosterStudent.studentId,
-            email: pendingGoogleAccount.email,
+            email: emailLower,
             cohort: rosterStudent.cohort,
             yearOfStudy: rosterStudent.yearOfStudy,
             program: rosterStudent.program,
-            country: sanitizeText(country || 'Malaysia', 64) || 'Malaysia',
+            country: cleanCountry,
             role: isConfiguredAdmin ? 'admin' : 'voter',
             hasVoted: false,
             votedAt: null,
@@ -832,6 +929,13 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             if (cData.currentPhase !== 'VOTING_LIVE') {
               throw new Error('Voting is currently closed.');
             }
+            const voterNameKey = normalizeFullNameKey(uData.fullName, uData.cohort);
+            if (
+              cData.votedStudentIds?.includes(uData.studentId) ||
+              cData.votedFullNames?.includes(voterNameKey)
+            ) {
+              throw new Error('This student has already cast a ballot via Lab Booth.');
+            }
 
             const candSnaps = await Promise.all(
               uniqueIds.map((id) => tx.get(doc(firebaseDb!, 'candidates', id)))
@@ -899,31 +1003,115 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             message: 'Candidate applications are permanently locked once Voting Live begins.',
           };
         }
-        if (currentUser.cohort !== 'C5' && currentUser.cohort !== 'C6') {
-          return { ok: false, message: 'Candidate eligibility requires Cohort 5 or Cohort 6.' };
+
+        const isAdminDirectAdd =
+          isAdmin && initialStatus === 'approved' && Boolean(input.targetStudentId);
+
+        let targetStudentId = currentUser.studentId;
+        let targetEmail = currentUser.email;
+        let targetCohort = currentUser.cohort;
+        let targetYear = currentUser.yearOfStudy;
+        let targetProgram = currentUser.program;
+        let targetName =
+          sanitizeText(input.fullName || currentUser.fullName, 120) || currentUser.fullName;
+
+        if (isAdminDirectAdd && input.targetStudentId) {
+          const normalizedTarget = normalizeAiuStudentId(input.targetStudentId);
+          const rosterStudent = findRosterStudent(normalizedTarget);
+          if (!rosterStudent) {
+            return {
+              ok: false,
+              message: `Student ID ${normalizedTarget} not found in SCI Cohort 4-7 roster.`,
+            };
+          }
+          if (rosterStudent.cohort !== 'C5' && rosterStudent.cohort !== 'C6') {
+            return {
+              ok: false,
+              message: 'Candidate eligibility requires Cohort 5 or Cohort 6.',
+            };
+          }
+          targetStudentId = rosterStudent.studentId;
+          targetCohort = rosterStudent.cohort;
+          targetYear = rosterStudent.yearOfStudy;
+          targetProgram = rosterStudent.program;
+          targetName =
+            sanitizeText(input.fullName || rosterStudent.fullName, 120) || rosterStudent.fullName;
+          if (input.targetEmail) {
+            if (!isValidAiuEmail(input.targetEmail)) {
+              return {
+                ok: false,
+                message: 'Candidate email must end with @student.aiu.edu.my.',
+              };
+            }
+            targetEmail = input.targetEmail.trim().toLowerCase();
+          } else {
+            const slug = targetName
+              .toLowerCase()
+              .replace(/[^a-z\s]/g, ' ')
+              .trim()
+              .split(/\s+/)
+              .slice(0, 2)
+              .join('.');
+            targetEmail = `${slug}@student.aiu.edu.my`;
+          }
         }
+
+        if (targetCohort !== 'C5' && targetCohort !== 'C6') {
+          return {
+            ok: false,
+            message:
+              'Candidate eligibility requires Cohort 5 or Cohort 6 (at least one completed year in SCI).',
+          };
+        }
+        if (!isAdminDirectAdd && !isOfficialShortlistedNominee(targetStudentId)) {
+          return {
+            ok: false,
+            message:
+              'Only the 26 officially announced SCI nominees are eligible to submit a candidate application.',
+          };
+        }
+
+        const cleanCountry = sanitizeText(
+          input.country || (!isAdminDirectAdd ? currentUser.country : '') || '',
+          64
+        );
+        if (!cleanCountry) {
+          return { ok: false, message: 'Please select candidate nationality.' };
+        }
+
+        const duplicate = dbState.candidates.find(
+          (c) =>
+            c.studentId.toUpperCase() === targetStudentId.toUpperCase() ||
+            c.email.toLowerCase() === targetEmail.toLowerCase()
+        );
+        if (duplicate) {
+          return {
+            ok: false,
+            message: `A candidate application already exists for ${duplicate.fullName} (${duplicate.studentId}).`,
+          };
+        }
+
         const id = `cand-${Date.now()}`;
         const maxNum = dbState.candidates.reduce((m, c) => Math.max(m, c.candidateNumber || 0), 0);
         const nowIso = new Date().toISOString();
-        const name = sanitizeText(input.fullName || currentUser.fullName, 120) || currentUser.fullName;
         const newCand: Candidate = {
           id,
           candidateNumber: maxNum + 1,
-          fullName: name,
-          studentId: currentUser.studentId,
-          email: currentUser.email,
-          cohort: currentUser.cohort,
-          yearOfStudy: currentUser.yearOfStudy === 3 ? 3 : 2,
-          program: currentUser.program,
-          country: sanitizeText(input.country || currentUser.country, 64) || 'Malaysia',
+          fullName: targetName,
+          studentId: targetStudentId,
+          email: targetEmail.toLowerCase(),
+          cohort: targetCohort,
+          yearOfStudy: targetYear === 3 ? 3 : 2,
+          program: targetProgram,
+          country: cleanCountry,
           manifesto:
             sanitizeText(input.manifesto || '', 1200) ||
             'Manifesto forthcoming ahead of Manifesto Day.',
           photoUrl:
             input.photoUrl?.trim() ||
             generateSvgAvatarDataUrl(
-              name,
-              `${shortProgramLabel(currentUser.program).slice(0, 3).toUpperCase()} Y${currentUser.yearOfStudy}`
+              targetName,
+              `${shortProgramLabel(targetProgram).slice(0, 3).toUpperCase()} Y${targetYear}`
             ),
           status: initialStatus,
           votes: 0,
@@ -932,7 +1120,14 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           appointedRole: null,
         };
         await setDoc(doc(firebaseDb, 'candidates', id), newCand);
-        return { ok: true, message: 'Candidate application saved.', data: newCand };
+        return {
+          ok: true,
+          message:
+            initialStatus === 'approved'
+              ? `${newCand.fullName} added to approved contestants.`
+              : 'Application submitted for Admin verification against the official shortlist.',
+          data: newCand,
+        };
       }
 
       const { nextState, result } = localSubmitCandidateApplication(
@@ -944,7 +1139,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (result.ok) notifyLocalSync(nextState);
       return result;
     },
-    [currentUser, dbState, notifyLocalSync]
+    [currentUser, dbState, isAdmin, notifyLocalSync]
   );
 
   const setCandidateStatus = useCallback(
@@ -953,15 +1148,6 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return { ok: false, message: 'Admin permission required.' };
       }
       if (isFirebaseConfigured && firebaseDb) {
-        const approvedCount = dbState.candidates.filter(
-          (c) => c.status === 'approved' && c.id !== id
-        ).length;
-        if (status === 'approved' && approvedCount >= dbState.config.maxApprovedCandidates) {
-          return {
-            ok: false,
-            message: `Cannot exceed ${dbState.config.maxApprovedCandidates} approved contestants.`,
-          };
-        }
         await updateDoc(doc(firebaseDb, 'candidates', id), {
           status,
           updatedAt: new Date().toISOString(),
@@ -1032,6 +1218,16 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!currentUser || !isAdmin) {
         return { ok: false, message: 'Admin permission required.' };
       }
+      if (isProfileEditLockedPhase(dbState.config.currentPhase)) {
+        return {
+          ok: false,
+          message: 'Candidate removal is locked once Voting Live begins.',
+        };
+      }
+      if (isFirebaseConfigured && firebaseDb) {
+        await deleteDoc(doc(firebaseDb, 'candidates', id));
+        return { ok: true, message: 'Candidate entry removed.' };
+      }
       const { nextState, result } = localDeleteCandidate(dbState, currentUser, id);
       if (result.ok) notifyLocalSync(nextState);
       return result;
@@ -1058,10 +1254,31 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateElectionConfig = useCallback(
     async (
-      partial: Partial<Pick<ElectionConfig, 'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin'>>
+      partial: Partial<
+        Pick<
+          ElectionConfig,
+          'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+        >
+      >
     ): Promise<ActionResult> => {
       if (!currentUser || !isAdmin) {
         return { ok: false, message: 'Admin permission required.' };
+      }
+      if (partial.labBoothPin !== undefined && !/^\d{4}$/.test(partial.labBoothPin)) {
+        return {
+          ok: false,
+          message: 'Lab Booth Admin PIN must be exactly 4 digits.',
+        };
+      }
+      if (
+        partial.topAdvancingCount !== undefined &&
+        partial.topAdvancingCount !== null &&
+        (!Number.isInteger(partial.topAdvancingCount) || partial.topAdvancingCount < 1)
+      ) {
+        return {
+          ok: false,
+          message: 'Interview shortlist cutoff must be a positive whole number or set to Undecided.',
+        };
       }
       if (isFirebaseConfigured && firebaseDb) {
         await updateDoc(doc(firebaseDb, 'electionConfig', 'current'), {
@@ -1085,14 +1302,170 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { nextState, result } = localManageAdminEmails(dbState, currentUser, action, email);
       if (result.ok) {
         if (isFirebaseConfigured && firebaseDb) {
+          const cleanEmail = email.trim().toLowerCase();
           await updateDoc(doc(firebaseDb, 'electionConfig', 'current'), {
             adminEmails: nextState.config.adminEmails,
             lastUpdatedAt: new Date().toISOString(),
           });
+          const matchingUser = Object.values(dbState.users).find(
+            (u) => u.email.toLowerCase() === cleanEmail
+          );
+          if (matchingUser) {
+            await updateDoc(doc(firebaseDb, 'users', matchingUser.uid), {
+              role: action === 'add' ? 'admin' : 'voter',
+            }).catch(() => {});
+          }
         } else {
           notifyLocalSync(nextState);
         }
       }
+      return result;
+    },
+    [currentUser, dbState, isAdmin, notifyLocalSync]
+  );
+
+  const adminUpdateUser = useCallback(
+    async (targetUid: string, updates: AdminUpdateUserInput): Promise<ActionResult<UserProfile>> => {
+      if (!currentUser || !isAdmin) {
+        return { ok: false, message: 'Admin permission required.' };
+      }
+
+      if (isFirebaseConfigured && firebaseDb) {
+        const cleanName = sanitizeText(updates.fullName, 120);
+        const cleanStudentId = normalizeAiuStudentId(updates.studentId);
+        const cleanCountry = sanitizeText(updates.country, 64);
+
+        if (cleanName.length < 2) {
+          return { ok: false, message: 'Full name must be at least 2 characters.' };
+        }
+        if (!/^AIU\d{7,10}$/.test(cleanStudentId)) {
+          return { ok: false, message: 'Enter a valid AIU Student ID (e.g. AIU24102323).' };
+        }
+        if (!cleanCountry) {
+          return { ok: false, message: 'Nationality is required.' };
+        }
+
+        try {
+          let updatedProfile: UserProfile | undefined;
+          await runTransaction(firebaseDb, async (tx) => {
+            const userRef = doc(firebaseDb!, 'users', targetUid);
+            const cfgRef = doc(firebaseDb!, 'electionConfig', 'current');
+            const [userSnap, cfgSnap] = await Promise.all([tx.get(userRef), tx.get(cfgRef)]);
+            if (!userSnap.exists()) {
+              throw new Error('Registered user not found.');
+            }
+            const existing = userSnap.data() as UserProfile;
+            if (
+              existing.email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase() &&
+              updates.role !== 'admin'
+            ) {
+              throw new Error('Primary Tech Lead admin cannot be demoted to voter.');
+            }
+            if (cleanStudentId !== existing.studentId && existing.hasVoted) {
+              throw new Error('Cannot change Student ID after a user has already cast a ballot.');
+            }
+
+            const claimedByOther = Object.values(dbState.users).find(
+              (u) => u.uid !== targetUid && u.studentId.toUpperCase() === cleanStudentId.toUpperCase()
+            );
+            if (claimedByOther) {
+              throw new Error(`Student ID ${cleanStudentId} is already bound to ${claimedByOther.fullName}.`);
+            }
+
+            const studentIdChanged = cleanStudentId !== existing.studentId;
+            const oldLockRef = doc(firebaseDb!, 'studentLocks', existing.studentId);
+            const newLockRef = doc(firebaseDb!, 'studentLocks', cleanStudentId);
+            const [oldLockSnap, newLockSnap] = studentIdChanged
+              ? await Promise.all([tx.get(oldLockRef), tx.get(newLockRef)])
+              : [null, null];
+
+            if (
+              studentIdChanged &&
+              newLockSnap?.exists() &&
+              (newLockSnap.data() as { uid: string }).uid !== targetUid
+            ) {
+              throw new Error(`Student ID ${cleanStudentId} is already locked to another Google account.`);
+            }
+
+            const nextProfile: UserProfile = {
+              ...existing,
+              fullName: cleanName,
+              studentId: cleanStudentId,
+              cohort: updates.cohort,
+              yearOfStudy: updates.yearOfStudy,
+              program: updates.program,
+              country: cleanCountry,
+              role: updates.role,
+              hasVoted: existing.hasVoted,
+              votedAt: existing.votedAt,
+              votingChannel: existing.votingChannel,
+              receiptCode: existing.receiptCode,
+            };
+            updatedProfile = nextProfile;
+
+            tx.update(userRef, {
+              fullName: cleanName,
+              studentId: cleanStudentId,
+              cohort: updates.cohort,
+              yearOfStudy: updates.yearOfStudy,
+              program: updates.program,
+              country: cleanCountry,
+              role: updates.role,
+            });
+
+            if (studentIdChanged) {
+              if (oldLockSnap?.exists()) {
+                tx.delete(oldLockRef);
+              }
+              tx.set(newLockRef, {
+                studentId: cleanStudentId,
+                uid: targetUid,
+                email: existing.email.toLowerCase(),
+                hasVoted: existing.hasVoted,
+              });
+            }
+
+            if (cfgSnap.exists()) {
+              const cfg = cfgSnap.data() as ElectionConfig;
+              const adminSet = new Set((cfg.adminEmails || []).map((e) => e.toLowerCase()));
+              const emailLower = existing.email.toLowerCase();
+              if (updates.role === 'admin') {
+                adminSet.add(emailLower);
+              } else if (emailLower !== PRIMARY_ADMIN_EMAIL.toLowerCase()) {
+                adminSet.delete(emailLower);
+              }
+              tx.update(cfgRef, {
+                adminEmails: Array.from(adminSet),
+                lastUpdatedAt: new Date().toISOString(),
+              });
+            }
+
+            const logId = `log-${Date.now()}`;
+            tx.set(doc(firebaseDb!, 'auditLogs', logId), {
+              id: logId,
+              timestamp: new Date().toISOString(),
+              actorName: currentUser.fullName,
+              actorEmail: currentUser.email,
+              action: 'ADMIN_USER_UPDATED',
+              details: `Updated user ${nextProfile.fullName} (${nextProfile.studentId}, ${nextProfile.country}, role: ${nextProfile.role}). Ballot status untouched.`,
+            });
+          });
+
+          return {
+            ok: true,
+            message: `Updated profile for ${updatedProfile?.fullName || updates.fullName}.`,
+            data: updatedProfile,
+          };
+        } catch (err) {
+          return {
+            ok: false,
+            message: err instanceof Error ? err.message : 'Unable to update user profile.',
+          };
+        }
+      }
+
+      const { nextState, result } = localAdminUpdateUser(dbState, currentUser, targetUid, updates);
+      if (result.ok) notifyLocalSync(nextState);
       return result;
     },
     [currentUser, dbState, isAdmin, notifyLocalSync]
@@ -1275,6 +1648,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       updateElectionPhase,
       updateElectionConfig,
       manageAdminEmails,
+      adminUpdateUser,
       labBoothSession,
       startLabBoothSession,
       submitLabBoothBallot,
@@ -1283,6 +1657,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }),
     [
       activeTab,
+      adminUpdateUser,
       applicationModalOpen,
       approvedCandidates,
       assignTopCommitteeRole,

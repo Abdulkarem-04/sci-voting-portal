@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { findRosterStudent } from '../data/cohortRoster';
-import { AIU_COUNTRIES } from '../data/seedData';
+import { AIU_COUNTRIES, isOfficialShortlistedNominee } from '../data/seedData';
 import { useElection } from '../services/electionContext';
 import { Candidate, CandidateStatus } from '../types/election';
 import {
@@ -35,9 +35,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
   editCandidate = null,
 }) => {
   const {
-    dbState,
     currentUser,
-    approvedCandidates,
     isProfileLocked,
     submitCandidateApplication,
     updateCandidateDetails,
@@ -46,7 +44,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
   const [fullName, setFullName] = useState('');
   const [targetStudentId, setTargetStudentId] = useState('');
   const [targetEmail, setTargetEmail] = useState('');
-  const [country, setCountry] = useState('Malaysia');
+  const [country, setCountry] = useState('');
   const [manifesto, setManifesto] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +72,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
       setFullName('');
       setTargetStudentId('');
       setTargetEmail('');
-      setCountry('Malaysia');
+      setCountry('');
       setManifesto('');
       setPhotoUrl('');
       return;
@@ -84,7 +82,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
       setFullName(currentUser.fullName);
       setTargetStudentId(currentUser.studentId);
       setTargetEmail(currentUser.email);
-      setCountry(currentUser.country);
+      setCountry(currentUser.country || '');
       setManifesto('');
       setPhotoUrl('');
     }
@@ -95,9 +93,10 @@ export const CandidateApplicationModal: React.FC<Props> = ({
   const rosterLookup =
     adminAddMode && targetStudentId ? findRosterStudent(targetStudentId) : null;
 
-  const approvedCount = approvedCandidates.length;
-  const maxAllowed = dbState.config.maxApprovedCandidates;
-  const capReached = !isEditMode && approvedCount >= maxAllowed;
+  const notShortlisted =
+    !isEditMode &&
+    !adminAddMode &&
+    Boolean(currentUser && !isOfficialShortlistedNominee(currentUser.studentId));
   const ineligibleCohort =
     !isEditMode && !adminAddMode && currentUser && currentUser.cohort === 'C7';
   const lockedForSubmit = isProfileLocked;
@@ -197,7 +196,9 @@ export const CandidateApplicationModal: React.FC<Props> = ({
             <p className="text-[11px] font-mono text-zinc-500 mt-0.5">
               {isEditMode
                 ? `${editCandidate?.studentId} | Edits lock in Voting Live`
-                : `Approved Slots: ${approvedCount} / ${maxAllowed}`}
+                : adminAddMode
+                  ? 'Admin Direct Roster Verification (C5/C6)'
+                  : 'Restricted to the 26 officially shortlisted SCI nominees'}
             </p>
           </div>
           <button
@@ -211,15 +212,15 @@ export const CandidateApplicationModal: React.FC<Props> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto scrollbar-thin">
-          {(lockedForSubmit || capReached || ineligibleCohort) && (
+          {(lockedForSubmit || notShortlisted || ineligibleCohort) && (
             <div className="rounded-xl bg-zinc-100 border border-zinc-200 p-3.5 text-xs text-zinc-700 flex items-start gap-2.5">
               <Lock className="w-4 h-4 shrink-0 mt-0.5 text-zinc-500" />
               <div>
                 {lockedForSubmit
                   ? 'Candidate applications and profile edits are permanently locked once Phase 3 (Voting Live) begins.'
-                  : capReached
-                    ? `Maximum limit of ${maxAllowed} approved candidates has been reached.`
-                    : 'Candidate eligibility requires Cohort 5 or Cohort 6 (Year 2 or Year 3 in SCI).'}
+                  : ineligibleCohort
+                    ? 'Candidate eligibility requires Cohort 5 or Cohort 6 (Year 2 or Year 3 in SCI).'
+                    : 'Only the 26 officially announced SCI nominees are eligible to submit a candidate application.'}
               </div>
             </div>
           )}
@@ -301,7 +302,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Editable Confirmed Full Name + Country */}
+          {/* Editable Confirmed Full Name + Nationality */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-zinc-700 mb-1">
@@ -319,14 +320,18 @@ export const CandidateApplicationModal: React.FC<Props> = ({
 
             <div>
               <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                Country
+                Nationality
               </label>
               <select
+                required
                 disabled={lockedForSubmit}
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-950 disabled:bg-zinc-100"
               >
+                <option value="" disabled>
+                  -- Select nationality --
+                </option>
                 {AIU_COUNTRIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -400,7 +405,7 @@ export const CandidateApplicationModal: React.FC<Props> = ({
             </button>
             <button
               type="submit"
-              disabled={submitting || lockedForSubmit || capReached || Boolean(ineligibleCohort)}
+              disabled={submitting || lockedForSubmit || notShortlisted || Boolean(ineligibleCohort)}
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 text-white text-xs font-bold transition-colors"
             >
               <CheckCircle2 className="w-4 h-4" />

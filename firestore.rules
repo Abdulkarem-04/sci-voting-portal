@@ -37,9 +37,19 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isListedAdminEmail()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isListedAdminEmail();
+    }
+
+    function isShortlistedNomineeId(sid) {
+      return sid in [
+        'AIU25102558', 'AIU25102391', 'AIU25102413', 'AIU25102628',
+        'AIU25102683', 'AIU25102346', 'AIU25102120', 'AIU25102230',
+        'AIU25102210', 'AIU25102569', 'AIU25102015', 'AIU25102265',
+        'AIU25102263', 'AIU25102370', 'AIU25102012', 'AIU25102013',
+        'AIU25102235', 'AIU25102458', 'AIU25102397', 'AIU24102082',
+        'AIU24102077', 'AIU25102679', 'AIU25102278', 'AIU25102629',
+        'AIU25102357', 'AIU25102211'
+      ];
     }
 
     function profileEditablePhase() {
@@ -75,10 +85,15 @@ service cloud.firestore {
           || (request.resource.data.role == 'admin' && isListedAdminEmail())
         );
 
-      // Single-ballot lock: student transitions hasVoted false -> true once during VOTING_LIVE
-      allow update: if isAdmin() || (
-        isVerifiedAiuStudent()
-        && request.auth.uid == userId
+      // Admins may edit user identity details cleanly (never altering ballot status); voters transition hasVoted false -> true once
+      allow update: if (
+        isAdmin()
+        && request.resource.data.hasVoted == resource.data.hasVoted
+        && request.resource.data.votedAt == resource.data.votedAt
+        && request.resource.data.votingChannel == resource.data.votingChannel
+        && request.resource.data.receiptCode == resource.data.receiptCode
+      ) || (
+        (isAdmin() || (isVerifiedAiuStudent() && request.auth.uid == userId))
         && resource.data.hasVoted == false
         && request.resource.data.hasVoted == true
         && request.resource.data.role == resource.data.role
@@ -92,11 +107,13 @@ service cloud.firestore {
     match /studentLocks/{studentId} {
       allow get: if isVerifiedAiuStudent() || isAdmin();
       allow list: if isAdmin();
-      allow create: if isVerifiedAiuStudent()
+      allow create: if isAdmin() || (
+        isVerifiedAiuStudent()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email.lower()
         && request.resource.data.studentId == studentId
-        && request.resource.data.hasVoted == false;
+        && request.resource.data.hasVoted == false
+      );
       allow update: if isAdmin() || (
         isVerifiedAiuStudent()
         && resource.data.uid == request.auth.uid
@@ -104,16 +121,18 @@ service cloud.firestore {
         && request.resource.data.hasVoted == true
         && currentConfig().currentPhase == 'VOTING_LIVE'
       );
+      allow delete: if isAdmin() && resource.data.hasVoted == false;
     }
 
     // Public candidates collection
     match /candidates/{candidateId} {
       allow read: if true;
 
-      // Eligible C5/C6 students or Admins may create before Voting Live starts
+      // Shortlisted C5/C6 nominees or Admins may create before Voting Live starts
       allow create: if profileEditablePhase() && (
         isAdmin() || (
           isVerifiedAiuStudent()
+          && isShortlistedNomineeId(request.resource.data.studentId)
           && request.resource.data.status == 'pending'
           && request.resource.data.votes == 0
           && request.resource.data.cohort in ['C5', 'C6']

@@ -4,9 +4,45 @@ import {
   ElectionPhase,
   ProgramOfStudy,
 } from '../types/election';
-import { generateSvgAvatarDataUrl } from '../utils/imageUtils';
+import { generateSvgAvatarDataUrl, normalizeAiuStudentId } from '../utils/imageUtils';
 
 export const PRIMARY_ADMIN_EMAIL = 'ajogal.abubakar@student.aiu.edu.my';
+
+export const OFFICIAL_SHORTLISTED_NOMINEE_IDS: string[] = [
+  'AIU25102558',
+  'AIU25102391',
+  'AIU25102413',
+  'AIU25102628',
+  'AIU25102683',
+  'AIU25102346',
+  'AIU25102120',
+  'AIU25102230',
+  'AIU25102210',
+  'AIU25102569',
+  'AIU25102015',
+  'AIU25102265',
+  'AIU25102263',
+  'AIU25102370',
+  'AIU25102012',
+  'AIU25102013',
+  'AIU25102235',
+  'AIU25102458',
+  'AIU25102397',
+  'AIU24102082',
+  'AIU24102077',
+  'AIU25102679',
+  'AIU25102278',
+  'AIU25102629',
+  'AIU25102357',
+  'AIU25102211',
+];
+
+const OFFICIAL_SHORTLIST_SET = new Set(OFFICIAL_SHORTLISTED_NOMINEE_IDS);
+
+export function isOfficialShortlistedNominee(rawStudentId: string): boolean {
+  const normalized = normalizeAiuStudentId(rawStudentId);
+  return normalized ? OFFICIAL_SHORTLIST_SET.has(normalized) : false;
+}
 
 export const SCI_PROGRAMS: ProgramOfStudy[] = [
   'Bachelor in Computer Science (Honours)',
@@ -256,8 +292,9 @@ export const PHASE_META: Record<
     stepNum: '04',
     label: '4. Ended',
     shortLabel: 'Ended',
-    description: 'Ballots closed. Top 8 shortlist advances to Dean and Management Panel interviews.',
-    note: 'Top 8 Interviews & Handover',
+    description:
+      'Ballots closed. Shortlisted top candidates advance to Dean and Management Panel interviews.',
+    note: 'Panel Interviews & Handover',
   },
 };
 
@@ -272,9 +309,8 @@ export function createInitialSeedState(): ElectionDatabaseState {
         'Cast your vote and help shape the next leadership of the School of Computing and Informatics.',
       academicSession: '2026/2027',
       currentPhase: 'VOTING_LIVE',
-      maxApprovedCandidates: 15,
       maxVotesPerBallot: 4,
-      topAdvancingCount: 8,
+      topAdvancingCount: null,
       liveResultsPublic: true,
       votingDateDisplay: 'Monday, November 30, 2026',
       votingWindowDisplay: '09:30 AM - 05:30 PM',

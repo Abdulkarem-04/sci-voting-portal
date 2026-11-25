@@ -13,6 +13,7 @@ import {
   Monitor,
   Plus,
   RefreshCw,
+  Search,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -20,6 +21,7 @@ import {
   UserPlus,
   Users,
   Vote,
+  X,
 } from 'lucide-react';
 import { C4_SENIOR_COUNT, findRosterStudent } from '../data/cohortRoster';
 import {
@@ -35,6 +37,8 @@ import {
   ElectionPhase,
   ProgramOfStudy,
   TopCommitteeRole,
+  UserProfile,
+  UserRole,
   VotingCohortCode,
 } from '../types/election';
 import { shortProgramLabel } from '../utils/imageUtils';
@@ -79,6 +83,7 @@ export const AdminView: React.FC = () => {
     updateElectionPhase,
     updateElectionConfig,
     manageAdminEmails,
+    adminUpdateUser,
     startLabBoothSession,
     simulateC4Visit,
     resetDemoDatabase,
@@ -86,18 +91,21 @@ export const AdminView: React.FC = () => {
 
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Registered voters & Lab Booth PIN form states
+  // Registered voters, Lab Booth PIN & Interview Shortlist Cutoff form states
   const [votersDraft, setVotersDraft] = useState<string>(
     String(dbState.config.totalRegisteredVoters)
   );
   const [pinDraft, setPinDraft] = useState<string>(dbState.config.labBoothPin);
+  const [cutoffDraft, setCutoffDraft] = useState<string>(
+    dbState.config.topAdvancingCount ? String(dbState.config.topAdvancingCount) : ''
+  );
 
   // Physical Lab Voting Booth Check-In state
   const [labStudentId, setLabStudentId] = useState('');
   const [labFullName, setLabFullName] = useState('');
   const [labCohort, setLabCohort] = useState<VotingCohortCode>('C7');
   const [labProgram, setLabProgram] = useState<ProgramOfStudy>(SCI_PROGRAMS[0]);
-  const [labCountry, setLabCountry] = useState<string>('Malaysia');
+  const [labCountry, setLabCountry] = useState<string>('');
   const [labEmail, setLabEmail] = useState('');
   const [labLookupNote, setLabLookupNote] = useState<{
     type: 'info' | 'warning';
@@ -108,6 +116,18 @@ export const AdminView: React.FC = () => {
   const [addCandidateOpen, setAddCandidateOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
 
+  // Registered Users Directory & Edit User Modal
+  const [userSearch, setUserSearch] = useState('');
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserId, setEditUserId] = useState('');
+  const [editUserCohort, setEditUserCohort] = useState<VotingCohortCode>('C7');
+  const [editUserYear, setEditUserYear] = useState<1 | 2 | 3>(1);
+  const [editUserProgram, setEditUserProgram] = useState<ProgramOfStudy>(SCI_PROGRAMS[0]);
+  const [editUserCountry, setEditUserCountry] = useState('');
+  const [editUserRole, setEditUserRole] = useState<UserRole>('voter');
+  const [savingUser, setSavingUser] = useState(false);
+
   // Rejected candidates drawer toggle
   const [showRejected, setShowRejected] = useState(false);
 
@@ -116,6 +136,21 @@ export const AdminView: React.FC = () => {
 
   // Audit filter
   const [auditFilter, setAuditFilter] = useState<'all' | 'security' | 'booth'>('all');
+
+  const registeredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return Object.values(dbState.users)
+      .filter((u) => {
+        if (!q) return true;
+        return (
+          u.fullName.toLowerCase().includes(q) ||
+          u.studentId.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.country.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }, [dbState.users, userSearch]);
 
   const rejectedCandidates = useMemo(
     () => dbState.candidates.filter((c) => c.status === 'rejected'),
@@ -260,8 +295,66 @@ export const AdminView: React.FC = () => {
     } else {
       setLabStudentId('');
       setLabFullName('');
+      setLabCountry('');
       setLabEmail('');
       setLabLookupNote(null);
+    }
+  };
+
+  const handleSetCutoff = async (cutoff: number | null) => {
+    const res = await updateElectionConfig({ topAdvancingCount: cutoff });
+    if (res.ok) {
+      setCutoffDraft(cutoff ? String(cutoff) : '');
+    }
+    showFeedback(res.ok, res.message);
+  };
+
+  const handleSaveCustomCutoff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = cutoffDraft.trim();
+    if (!trimmed) {
+      await handleSetCutoff(null);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      showFeedback(false, 'Enter a positive whole number for the interview cutoff.');
+      return;
+    }
+    await handleSetCutoff(parsed);
+  };
+
+  const openUserEditor = (u: UserProfile) => {
+    setEditingUser(u);
+    setEditUserName(u.fullName);
+    setEditUserId(u.studentId);
+    setEditUserCohort(u.cohort);
+    setEditUserYear(u.yearOfStudy);
+    setEditUserProgram(u.program);
+    setEditUserCountry(u.country);
+    setEditUserRole(u.role);
+  };
+
+  const handleSaveUserEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setSavingUser(true);
+    try {
+      const res = await adminUpdateUser(editingUser.uid, {
+        fullName: editUserName,
+        studentId: editUserId,
+        cohort: editUserCohort,
+        yearOfStudy: editUserYear,
+        program: editUserProgram,
+        country: editUserCountry,
+        role: editUserRole,
+      });
+      showFeedback(res.ok, res.message);
+      if (res.ok) {
+        setEditingUser(null);
+      }
+    } finally {
+      setSavingUser(false);
     }
   };
 
@@ -372,9 +465,7 @@ export const AdminView: React.FC = () => {
               <span className="font-mono text-2xl font-extrabold text-zinc-950">
                 {approvedCandidates.length}
               </span>
-              <span className="font-mono text-xs text-zinc-500">
-                / {config.maxApprovedCandidates} max
-              </span>
+              <span className="font-mono text-xs text-zinc-500">approved candidates</span>
             </div>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
@@ -498,7 +589,7 @@ export const AdminView: React.FC = () => {
           })}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-zinc-100">
           {/* Live Results Public Toggle */}
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 flex items-center justify-between gap-3">
             <div>
@@ -586,6 +677,71 @@ export const AdminView: React.FC = () => {
             >
               Update
             </button>
+          </form>
+
+          {/* Interview Shortlist Cutoff (Undecided / Top 8 / Top 13 / Custom) */}
+          <form
+            onSubmit={handleSaveCustomCutoff}
+            className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-bold text-zinc-900">
+                Interview Shortlist Cutoff
+              </label>
+              <span className="font-mono text-[10px] font-bold text-emerald-700">
+                {config.topAdvancingCount ? `Top ${config.topAdvancingCount}` : 'Undecided'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleSetCutoff(null)}
+                className={`rounded-lg px-2 py-1 text-[10px] font-bold border transition-colors ${
+                  !config.topAdvancingCount
+                    ? 'border-emerald-300 bg-emerald-600 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                Show All
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetCutoff(8)}
+                className={`rounded-lg px-2 py-1 text-[10px] font-bold border transition-colors ${
+                  config.topAdvancingCount === 8
+                    ? 'border-emerald-300 bg-emerald-600 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                Top 8
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetCutoff(13)}
+                className={`rounded-lg px-2 py-1 text-[10px] font-bold border transition-colors ${
+                  config.topAdvancingCount === 13
+                    ? 'border-emerald-300 bg-emerald-600 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                Top 13
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                placeholder="Custom"
+                value={cutoffDraft}
+                onChange={(e) => setCutoffDraft(e.target.value)}
+                className="w-14 rounded-lg border border-zinc-200 bg-white px-2 py-1 font-mono text-[11px] font-bold text-zinc-950 text-center"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-zinc-950 hover:bg-zinc-800 px-2.5 py-1 text-[10px] font-bold text-white"
+              >
+                Set
+              </button>
+            </div>
           </form>
         </div>
       </section>
@@ -677,13 +833,17 @@ export const AdminView: React.FC = () => {
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
-                Country <span className="text-red-500">*</span>
+                Nationality <span className="text-red-500">*</span>
               </label>
               <select
+                required
                 value={labCountry}
                 onChange={(e) => setLabCountry(e.target.value)}
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs text-zinc-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
+                <option value="" disabled>
+                  -- Select nationality --
+                </option>
                 {AIU_COUNTRIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -742,7 +902,7 @@ export const AdminView: React.FC = () => {
               3. Pending Nomination Verification Queue ({pendingCandidates.length})
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Approving adds candidates to the official ballot up to the 15-candidate cap.
+              Approving adds verified nominees to the official election ballot.
             </p>
           </div>
         </div>
@@ -814,8 +974,9 @@ export const AdminView: React.FC = () => {
               4. Approved Slate, Vote Tally &amp; Top 4 Appointments
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Top {config.topAdvancingCount} advance to interviews; committee appoints the final Top 4
-              roles after Election Ended.
+              {config.topAdvancingCount
+                ? `Top ${config.topAdvancingCount} advance to interviews; committee appoints the final Top 4 roles after Election Ended.`
+                : 'Shortlist cutoff is Undecided (Dean decides Top 8 or Top 13 after voting); committee appoints Top 4 roles after interviews.'}
             </p>
           </div>
           {rejectedCandidates.length > 0 && (
@@ -837,23 +998,28 @@ export const AdminView: React.FC = () => {
                 <th className="py-2.5 px-3">Contestant</th>
                 <th className="py-2.5 px-3">Cohort / Program</th>
                 <th className="py-2.5 px-3 text-right">Votes</th>
-                <th className="py-2.5 px-3">Top 4 Role (Top 8)</th>
+                <th className="py-2.5 px-3">
+                  {config.topAdvancingCount
+                    ? `Top 4 Role (Top ${config.topAdvancingCount})`
+                    : 'Top 4 Role'}
+                </th>
                 <th className="py-2.5 pl-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 text-xs">
               {rankedCandidates.map((cand, index) => {
                 const rank = index + 1;
-                const isTop8 = rank <= config.topAdvancingCount;
+                const hasCutoff = Boolean(config.topAdvancingCount && config.topAdvancingCount > 0);
+                const isAdvancing = !hasCutoff || rank <= (config.topAdvancingCount ?? 0);
                 return (
                   <tr
                     key={cand.id}
-                    className={isTop8 ? 'bg-white' : 'bg-zinc-50/40 text-zinc-500'}
+                    className={isAdvancing ? 'bg-white' : 'bg-zinc-50/40 text-zinc-500'}
                   >
                     <td className="py-3 pr-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-bold ${
-                          isTop8
+                          isAdvancing
                             ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
                             : 'bg-zinc-100 border border-zinc-200 text-zinc-500'
                         }`}
@@ -884,7 +1050,7 @@ export const AdminView: React.FC = () => {
                       {cand.votes}
                     </td>
                     <td className="py-3 px-3">
-                      {isTop8 ? (
+                      {isAdvancing ? (
                         <div className="flex items-center gap-1.5">
                           <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <select
@@ -893,7 +1059,11 @@ export const AdminView: React.FC = () => {
                             onChange={(e) => handleAssignRole(cand.id, e.target.value)}
                             className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           >
-                            <option value="">Top 8 Advancing</option>
+                            <option value="">
+                              {hasCutoff
+                                ? `Top ${config.topAdvancingCount} Advancing`
+                                : 'Shortlist Eligible'}
+                            </option>
                             {TOP_COMMITTEE_ROLES.map((role) => (
                               <option key={role} value={role}>
                                 {role}
@@ -902,7 +1072,9 @@ export const AdminView: React.FC = () => {
                           </select>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-zinc-400">Outside Top 8</span>
+                        <span className="text-[11px] text-zinc-400">
+                          Outside Top {config.topAdvancingCount}
+                        </span>
                       )}
                     </td>
                     <td className="py-3 pl-3 text-right whitespace-nowrap">
@@ -1093,14 +1265,110 @@ export const AdminView: React.FC = () => {
         </section>
       </div>
 
-      {/* 7. Immutable Security & Election Audit Log */}
+      {/* 7. Registered Users Directory & Profile Editor */}
+      <section className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-base font-extrabold text-zinc-950">
+              7. Registered Users Directory &amp; Editor ({registeredUsers.length})
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Fix student profile details (such as Nationality or Student ID) or promote Admins
+              instantly. Voting status is permanently read-only.
+            </p>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Search name, ID, nationality..."
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-8 pr-3 py-1.5 text-xs text-zinc-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-zinc-200">
+          {registeredUsers.length === 0 ? (
+            <div className="p-6 text-center text-xs text-zinc-500">
+              No matching verified user profiles found.
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th className="py-2.5 px-3">Student</th>
+                  <th className="py-2.5 px-3">Cohort / Program</th>
+                  <th className="py-2.5 px-3">Nationality</th>
+                  <th className="py-2.5 px-3">Role</th>
+                  <th className="py-2.5 px-3">Ballot Status (Locked)</th>
+                  <th className="py-2.5 px-3 text-right">Edit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 text-xs">
+                {registeredUsers.map((u) => (
+                  <tr key={u.uid} className="hover:bg-zinc-50/60">
+                    <td className="py-2.5 px-3">
+                      <p className="font-bold text-zinc-950">{u.fullName}</p>
+                      <p className="text-[11px] font-mono text-zinc-500">
+                        {u.studentId} / {u.email}
+                      </p>
+                    </td>
+                    <td className="py-2.5 px-3 whitespace-nowrap">
+                      <span className="font-mono font-bold text-zinc-800">{u.cohort}</span>{' '}
+                      <span className="text-zinc-500">/ {shortProgramLabel(u.program)}</span>
+                    </td>
+                    <td className="py-2.5 px-3 whitespace-nowrap font-medium text-zinc-800">
+                      {u.country}
+                    </td>
+                    <td className="py-2.5 px-3 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                          u.role === 'admin'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-zinc-200 bg-white text-zinc-600'
+                        }`}
+                      >
+                        {u.role === 'admin' ? 'Admin' : 'Voter'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 whitespace-nowrap">
+                      {u.hasVoted ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-emerald-700">
+                          <Lock className="w-3 h-3" />
+                          Voted ({u.votingChannel || 'recorded'})
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-zinc-400">Not Voted</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => openUserEditor(u)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      {/* 8. Immutable Security & Election Audit Log */}
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-zinc-500" />
             <div>
               <h2 className="text-base font-extrabold text-zinc-950">
-                7. Security &amp; Operations Audit Log ({filteredLogs.length})
+                8. Security &amp; Operations Audit Log ({filteredLogs.length})
               </h2>
               <p className="text-xs text-zinc-500">
                 Logs identity spoof blocks, Lab Booth authorizations, and phase changes. Zero ballot
@@ -1174,6 +1442,175 @@ export const AdminView: React.FC = () => {
         onClose={() => setEditingCandidate(null)}
         editCandidate={editingCandidate}
       />
+
+      {/* Admin Registered User Editor Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/45 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-2xl overflow-hidden my-8">
+            <div className="px-5 py-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
+              <div>
+                <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                  Admin User Profile Editor
+                </p>
+                <h3 className="text-sm font-extrabold text-zinc-950 truncate">
+                  {editingUser.email}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                aria-label="Close user edit modal"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/60"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUserEdit} className="p-5 space-y-4 text-xs">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 flex items-center gap-2.5 text-zinc-600">
+                <Lock className="w-4 h-4 text-zinc-500 shrink-0" />
+                <span>
+                  Ballot status (
+                  <strong className="text-zinc-900">
+                    {editingUser.hasVoted ? 'Voted' : 'Not Voted'}
+                  </strong>
+                  ) is permanently read-only and cannot be modified by Admins.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserName}
+                    onChange={(e) => setEditUserName(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Student ID {editingUser.hasVoted && '(Locked After Vote)'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={editingUser.hasVoted}
+                    value={editUserId}
+                    onChange={(e) => setEditUserId(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-mono uppercase text-zinc-950 disabled:bg-zinc-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Cohort
+                  </label>
+                  <select
+                    value={editUserCohort}
+                    onChange={(e) => setEditUserCohort(e.target.value as VotingCohortCode)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950"
+                  >
+                    <option value="C7">Cohort 7 (Year 1)</option>
+                    <option value="C6">Cohort 6 (Year 2)</option>
+                    <option value="C5">Cohort 5 (Year 3)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Year of Study
+                  </label>
+                  <select
+                    value={editUserYear}
+                    onChange={(e) => setEditUserYear(Number(e.target.value) as 1 | 2 | 3)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950"
+                  >
+                    <option value={1}>Year 1</option>
+                    <option value={2}>Year 2</option>
+                    <option value={3}>Year 3</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Program of Study
+                  </label>
+                  <select
+                    value={editUserProgram}
+                    onChange={(e) => setEditUserProgram(e.target.value as ProgramOfStudy)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950"
+                  >
+                    {SCI_PROGRAMS.map((prog) => (
+                      <option key={prog} value={prog}>
+                        {prog}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Nationality
+                  </label>
+                  <select
+                    required
+                    value={editUserCountry}
+                    onChange={(e) => setEditUserCountry(e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950"
+                  >
+                    <option value="" disabled>
+                      -- Select nationality --
+                    </option>
+                    {AIU_COUNTRIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-600 mb-1">
+                    Account Role
+                  </label>
+                  <select
+                    disabled={editingUser.email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase()}
+                    value={editUserRole}
+                    onChange={(e) => setEditUserRole(e.target.value as UserRole)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-950 disabled:bg-zinc-100"
+                  >
+                    <option value="voter">Verified Voter</option>
+                    <option value="admin">Election Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingUser}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {savingUser ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

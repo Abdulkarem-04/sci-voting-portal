@@ -10,7 +10,12 @@ import {
   Users,
   Vote,
 } from 'lucide-react';
-import { PHASE_META, PHASE_ORDER } from '../data/seedData';
+import {
+  isOfficialShortlistedNominee,
+  OFFICIAL_SHORTLISTED_NOMINEE_IDS,
+  PHASE_META,
+  PHASE_ORDER,
+} from '../data/seedData';
 import { useElection } from '../services/electionContext';
 import { CardPatternBg } from './CardPatternBg';
 
@@ -33,15 +38,17 @@ export const HomeView: React.FC = () => {
   const { config } = dbState;
   const phaseMeta = PHASE_META[config.currentPhase];
   const approvedCount = approvedCandidates.length;
-  const slotsLeft = Math.max(0, config.maxApprovedCandidates - approvedCount);
-  const nominationCapReached = approvedCount >= config.maxApprovedCandidates;
+  const totalShortlisted = OFFICIAL_SHORTLISTED_NOMINEE_IDS.length;
+  const isUserShortlisted = currentUser
+    ? isOfficialShortlistedNominee(currentUser.studentId)
+    : true;
   const turnoutPct =
     config.totalRegisteredVoters > 0
       ? ((config.totalBallotsCast / config.totalRegisteredVoters) * 100).toFixed(1)
       : '0.0';
 
   const isVotingLive = config.currentPhase === 'VOTING_LIVE';
-  const canApply = !isProfileLocked && !nominationCapReached;
+  const canApply = !isProfileLocked && isUserShortlisted;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-24 sm:pb-12 space-y-10">
@@ -141,7 +148,7 @@ export const HomeView: React.FC = () => {
                   )}
                 </div>
                 <span className="font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full border border-zinc-200 bg-zinc-50 text-zinc-600">
-                  {approvedCount} / {config.maxApprovedCandidates}
+                  {approvedCount} / {Math.max(totalShortlisted, approvedCount)}
                 </span>
               </div>
               <div>
@@ -154,10 +161,12 @@ export const HomeView: React.FC = () => {
                       ? 'Your candidate profile is verified and locked during Voting Live.'
                       : 'Your application is approved. Update your photo or manifesto before voting starts.'
                     : myCandidateProfile?.status === 'pending'
-                      ? 'Your application is pending Admin verification against the Dean shortlist.'
+                      ? 'Your application is pending Admin verification against the official shortlist.'
                       : isProfileLocked
                         ? 'Nominations and profile edits are locked once Voting Live begins.'
-                        : `${slotsLeft} approved slots open for eligible Cohort 5 and Cohort 6 students.`}
+                        : currentUser && !isUserShortlisted
+                          ? 'Restricted to the 26 officially announced SCI Committee nominees.'
+                          : `Open for the ${totalShortlisted} officially shortlisted SCI nominees to submit their profile.`}
                 </p>
               </div>
             </div>
@@ -187,8 +196,8 @@ export const HomeView: React.FC = () => {
                       ? 'Application Pending Review'
                       : isProfileLocked
                         ? 'Applications Locked'
-                        : nominationCapReached
-                          ? 'Maximum 15 Reached'
+                        : !isUserShortlisted
+                          ? 'Shortlisted Nominees Only'
                           : 'Apply as Candidate'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
@@ -211,8 +220,9 @@ export const HomeView: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-zinc-950">Live Results</h3>
                 <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                  Real-time public vote standings for all approved contestants. Top{' '}
-                  {config.topAdvancingCount} advance to panel interviews.
+                  {config.topAdvancingCount
+                    ? `Real-time public vote standings for all approved contestants. Top ${config.topAdvancingCount} advance to panel interviews.`
+                    : 'Real-time public vote standings for all approved contestants. Shortlisted top candidates advance to Dean & Management Panel interviews.'}
                 </p>
               </div>
             </div>
@@ -258,10 +268,7 @@ export const HomeView: React.FC = () => {
             <CardPatternBg variant="iso-waves" />
             <div className="relative z-10">
               <div className="font-mono text-3xl font-bold tracking-tight text-zinc-950">
-                {approvedCount}{' '}
-                <span className="text-base font-semibold text-zinc-400">
-                  / {config.maxApprovedCandidates}
-                </span>
+                {approvedCount}
               </div>
               <div className="text-xs font-bold text-zinc-700 mt-1">Active Candidates</div>
               <div className="text-[11px] text-zinc-400 mt-0.5">Approved for 26/27 ballot</div>

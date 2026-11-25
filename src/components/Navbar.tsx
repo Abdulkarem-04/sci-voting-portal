@@ -478,7 +478,7 @@ export const Navbar: React.FC = () => {
                   <Globe className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                      Country
+                      Nationality
                     </p>
                     <p className="font-semibold text-zinc-800">{currentUser.country}</p>
                   </div>

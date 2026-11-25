@@ -6,6 +6,7 @@ import {
 } from '../src/data/cohortRoster';
 import { createInitialSeedState, PRIMARY_ADMIN_EMAIL } from '../src/data/seedData';
 import {
+  localAdminUpdateUser,
   localAssignTopCommitteeRole,
   localAuthenticateWithRoster,
   localCastBallot,
@@ -120,9 +121,18 @@ runTest(4, 'Order-independent name tokens, direct ID prefix, and AIIU typo norma
   );
 });
 
-// Test 5: 1-to-1 Permanent Binding
-runTest(5, '1-to-1 Permanent Binding blocks email/ID rebinding in either direction', () => {
+// Test 5: 1-to-1 Permanent Binding & Mandatory Nationality Selection
+runTest(5, '1-to-1 Permanent Binding blocks rebinding and rejects blank nationality', () => {
   const base = getFreshState();
+
+  const blankCountry = localAuthenticateWithRoster(base, {
+    uid: 'uid-milad',
+    email: 'milad.sahebi@student.aiu.edu.my',
+    googleDisplayName: 'Milad Sahebi',
+    studentIdInput: 'AIU25102043',
+    country: '',
+  });
+  assert.equal(blankCountry.result.ok, false);
 
   // Bind Milad Sahebi (AIU25102043) to milad.sahebi@student.aiu.edu.my
   const step1 = localAuthenticateWithRoster(base, {
@@ -421,8 +431,8 @@ runTest(11, 'Ballot rejects empty, >4, duplicate, missing, pending selections, a
   }
 });
 
-// Test 12: Candidacy Rules (C5/C6 Only, 15-Candidate Cap, Phase Lock)
-runTest(12, 'Candidacy enforces C5/C6 eligibility, 15-candidate cap, and Phase 3-4 lock', () => {
+// Test 12: Candidacy Rules (26-Shortlist Self-Apply Security, Uncapped Slate, Phase Lock)
+runTest(12, 'Candidacy enforces C5/C6 + 26-nominee whitelist, allows >16 uncapped slate, and locks in Phases 3-4', () => {
   const base = getFreshState();
   const admin = base.users['user-admin-abdulkarem'];
   const c7Voter = base.users['user-voter-fresh'];
@@ -436,50 +446,63 @@ runTest(12, 'Candidacy enforces C5/C6 eligibility, 15-candidate cap, and Phase 3
   const c7Apply = localSubmitCandidateApplication(nomState, c7Voter, { manifesto: 'C7 test' });
   assert.equal(c7Apply.result.ok, false);
 
-  // Fill approved slate to 15 (starts with 10 approved, 2 pending)
-  let work = nomState;
+  // Non-shortlisted C5 student (AIU23102046) blocked from self-application
+  const nonShortlistedAuth = localAuthenticateWithRoster(nomState, {
+    uid: 'uid-alazab',
+    email: 'alazab.hamood@student.aiu.edu.my',
+    googleDisplayName: 'Alazab Mohammed Khaled Hamood',
+    studentIdInput: 'AIU23102046',
+    country: 'Yemen',
+  });
+  assert.equal(nonShortlistedAuth.result.ok, true);
+  const nonShortlistedApply = localSubmitCandidateApplication(
+    nonShortlistedAuth.nextState,
+    nonShortlistedAuth.result.data!.user!,
+    { country: 'Yemen', manifesto: 'Not on shortlist' }
+  );
+  assert.equal(nonShortlistedApply.result.ok, false);
+
+  // Official shortlisted C6 nominee (AIU25102558 Abdul Karim Bangura) succeeds on self-application
+  const shortlistedAuth = localAuthenticateWithRoster(nomState, {
+    uid: 'uid-bangura',
+    email: 'abdulkarim.bangura@student.aiu.edu.my',
+    googleDisplayName: 'Abdul Karim Bangura',
+    studentIdInput: 'AIU25102558',
+    country: 'Sierra Leone',
+  });
+  assert.equal(shortlistedAuth.result.ok, true);
+  const shortlistedApply = localSubmitCandidateApplication(
+    shortlistedAuth.nextState,
+    shortlistedAuth.result.data!.user!,
+    { country: 'Sierra Leone', manifesto: 'Serving SCI transparently' }
+  );
+  assert.equal(shortlistedApply.result.ok, true);
+  assert.equal(shortlistedApply.result.data!.status, 'pending');
+
+  // Uncapped candidate count: approve cand-11, cand-12, self-applied nominee + 4 Admin manual adds (> 16)
+  let work = shortlistedApply.nextState;
   work = localSetCandidateStatus(work, admin, 'cand-11', 'approved').nextState;
   work = localSetCandidateStatus(work, admin, 'cand-12', 'approved').nextState;
+  work = localSetCandidateStatus(work, admin, shortlistedApply.result.data!.id, 'approved').nextState;
 
   const existingIds = new Set(work.candidates.map((c) => c.studentId));
   const extraC5 = Object.values(COHORT_ROSTER).filter(
     (s) => s.cohort === 'C5' && !existingIds.has(s.studentId)
   );
-  assert.ok(extraC5.length >= 4, 'Roster must have enough extra C5 students to test 15-cap');
+  assert.ok(extraC5.length >= 5, 'Roster must have enough extra C5 students');
 
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     const res = localSubmitCandidateApplication(
       work,
       admin,
       { targetStudentId: extraC5[i].studentId, country: 'Malaysia', manifesto: 'Manifesto' },
       'approved'
     );
-    assert.equal(res.result.ok, true, `Adding candidate #${13 + i} should succeed`);
+    assert.equal(res.result.ok, true, `Adding candidate #${14 + i} must succeed without 15/16 cap`);
     work = res.nextState;
   }
 
-  assert.equal(work.candidates.filter((c) => c.status === 'approved').length, 15);
-
-  // 16th candidate rejected
-  const overCapSubmit = localSubmitCandidateApplication(
-    work,
-    admin,
-    { targetStudentId: extraC5[3].studentId, country: 'Malaysia', manifesto: '16th' },
-    'approved'
-  );
-  assert.equal(overCapSubmit.result.ok, false);
-
-  // Also test localSetCandidateStatus blocking a 16th approval when a pending cand exists
-  const pendingState = localSetCandidateStatus(work, admin, 'cand-12', 'pending').nextState;
-  const reAdded = localSubmitCandidateApplication(
-    pendingState,
-    admin,
-    { targetStudentId: extraC5[3].studentId, country: 'Malaysia', manifesto: 'Now 15th' },
-    'approved'
-  ).nextState;
-  assert.equal(reAdded.candidates.filter((c) => c.status === 'approved').length, 15);
-  const approve16th = localSetCandidateStatus(reAdded, admin, 'cand-12', 'approved');
-  assert.equal(approve16th.result.ok, false);
+  assert.equal(work.candidates.filter((c) => c.status === 'approved').length, 17);
 
   // Phases 3-4 block new candidate applications
   for (const lockedPhase of ['VOTING_LIVE', 'ENDED'] as const) {
@@ -490,7 +513,7 @@ runTest(12, 'Candidacy enforces C5/C6 eligibility, 15-candidate cap, and Phase 3
     const res = localSubmitCandidateApplication(
       lockedState,
       admin,
-      { targetStudentId: extraC5[3].studentId, country: 'Malaysia', manifesto: 'Too late' },
+      { targetStudentId: extraC5[4].studentId, country: 'Malaysia', manifesto: 'Too late' },
       'approved'
     );
     assert.equal(res.result.ok, false, `Phase ${lockedPhase} must lock nominations`);
@@ -588,4 +611,87 @@ runTest(14, 'Blocks non-admin privilege escalation, protects Primary Admin, and 
   assert.equal(/[<>]/.test(updated.result.data!.manifesto), false);
 });
 
-console.log(`\nAll ${passed} / 14 security tests passed.`);
+// Test 15: Admin User Profile Editor, Role Sync, Ballot Lock Integrity & Dynamic Interview Cutoff
+runTest(15, 'Admin User Editor updates profile/role while locking voting status & validates dynamic cutoff', () => {
+  const base = getFreshState();
+  const admin = base.users['user-admin-abdulkarem'];
+  const voter = base.users['user-voter-fresh'];
+
+  // Non-admin cannot edit user profiles
+  const unauth = localAdminUpdateUser(base, voter, voter.uid, {
+    fullName: voter.fullName,
+    studentId: voter.studentId,
+    cohort: voter.cohort,
+    yearOfStudy: voter.yearOfStudy,
+    program: voter.program,
+    country: 'Afghanistan',
+    role: 'admin',
+  });
+  assert.equal(unauth.result.ok, false);
+
+  // Primary admin cannot be demoted
+  const demotePrimary = localAdminUpdateUser(base, admin, admin.uid, {
+    fullName: admin.fullName,
+    studentId: admin.studentId,
+    cohort: admin.cohort,
+    yearOfStudy: admin.yearOfStudy,
+    program: admin.program,
+    country: admin.country,
+    role: 'voter',
+  });
+  assert.equal(demotePrimary.result.ok, false);
+
+  // Admin fixes another user's wrong nationality + promotes them to admin (syncing adminEmails)
+  const candUser = base.users['user-cand-jumairah'];
+  const edited = localAdminUpdateUser(base, admin, candUser.uid, {
+    fullName: candUser.fullName,
+    studentId: candUser.studentId,
+    cohort: candUser.cohort,
+    yearOfStudy: candUser.yearOfStudy,
+    program: candUser.program,
+    country: 'Sudan',
+    role: 'admin',
+  });
+  assert.equal(edited.result.ok, true);
+  assert.equal(edited.nextState.users[candUser.uid].country, 'Sudan');
+  assert.equal(edited.nextState.users[candUser.uid].role, 'admin');
+  assert.ok(edited.nextState.config.adminEmails.includes(candUser.email.toLowerCase()));
+  assert.equal(edited.nextState.users[candUser.uid].hasVoted, false);
+
+  // After user votes, Student ID cannot be changed and ballot fields stay untouched
+  const votedState = localCastBallot(edited.nextState, candUser.uid, ['cand-01']).nextState;
+  const votedSnapshot = votedState.users[candUser.uid];
+  const changeIdAfterVote = localAdminUpdateUser(votedState, admin, candUser.uid, {
+    fullName: votedSnapshot.fullName,
+    studentId: 'AIU25102999',
+    cohort: votedSnapshot.cohort,
+    yearOfStudy: votedSnapshot.yearOfStudy,
+    program: votedSnapshot.program,
+    country: 'Sudan',
+    role: 'admin',
+  });
+  assert.equal(changeIdAfterVote.result.ok, false);
+
+  const editCountryAfterVote = localAdminUpdateUser(votedState, admin, candUser.uid, {
+    fullName: 'Nur Jumairah Updated',
+    studentId: votedSnapshot.studentId,
+    cohort: votedSnapshot.cohort,
+    yearOfStudy: votedSnapshot.yearOfStudy,
+    program: votedSnapshot.program,
+    country: 'Malaysia',
+    role: 'voter',
+  });
+  assert.equal(editCountryAfterVote.result.ok, true);
+  assert.equal(editCountryAfterVote.nextState.users[candUser.uid].hasVoted, true);
+  assert.equal(editCountryAfterVote.nextState.users[candUser.uid].receiptCode, votedSnapshot.receiptCode);
+  assert.equal(editCountryAfterVote.nextState.users[candUser.uid].votingChannel, 'online');
+
+  // Dynamic Interview Shortlist Cutoff validation (Undecided / 8 / 13 / reject invalid)
+  assert.equal(localUpdateConfig(base, admin, { topAdvancingCount: null }).result.ok, true);
+  assert.equal(localUpdateConfig(base, admin, { topAdvancingCount: 8 }).result.ok, true);
+  assert.equal(localUpdateConfig(base, admin, { topAdvancingCount: 13 }).result.ok, true);
+  assert.equal(localUpdateConfig(base, admin, { topAdvancingCount: 0 }).result.ok, false);
+  assert.equal(localUpdateConfig(base, admin, { topAdvancingCount: -2 }).result.ok, false);
+});
+
+console.log(`\nAll ${passed} / 15 security tests passed.`);

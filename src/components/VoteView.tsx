@@ -239,8 +239,9 @@ export const VoteView: React.FC = () => {
             Select 1 to {maxChoices} Candidates
           </h1>
           <p className="text-xs sm:text-sm text-zinc-500 mt-1">
-            Votes are final once confirmed. The Top {config.topAdvancingCount} contestants advance
-            to Dean &amp; Management Panel interviews.
+            {config.topAdvancingCount
+              ? `Votes are final once confirmed. The Top ${config.topAdvancingCount} contestants advance to Dean & Management Panel interviews.`
+              : 'Votes are final once confirmed. Shortlisted top candidates advance to Dean & Management Panel interviews.'}
           </p>
         </div>
 
