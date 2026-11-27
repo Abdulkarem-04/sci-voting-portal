@@ -3,6 +3,7 @@ import { verifyEmailMatchesRosterStudent } from '../data/cohortRoster';
 import {
   createInitialSeedState,
   isOfficialShortlistedNominee,
+  MAX_MANIFESTO_LENGTH,
   PRIMARY_ADMIN_EMAIL,
 } from '../data/seedData';
 import {
@@ -783,7 +784,7 @@ export function localSubmitCandidateApplication(
   const next = cloneState(state);
   const maxNum = next.candidates.reduce((acc, c) => Math.max(acc, c.candidateNumber), 0);
   const nowIso = new Date().toISOString();
-  const cleanManifesto = sanitizeText(input.manifesto || '', 1200);
+  const cleanManifesto = sanitizeText(input.manifesto || '', MAX_MANIFESTO_LENGTH);
   const avatarTag = `${shortProgramLabel(targetProgram).slice(0, 3).toUpperCase()} Y${targetYear}`;
 
   const newCandidate: Candidate = {
@@ -914,7 +915,7 @@ export function localUpdateCandidateDetails(
       : target.country;
   const nextManifesto =
     updates.manifesto !== undefined
-      ? sanitizeText(updates.manifesto, 1200)
+      ? sanitizeText(updates.manifesto, MAX_MANIFESTO_LENGTH)
       : target.manifesto;
   const nextPhotoUrl =
     updates.photoUrl !== undefined ? updates.photoUrl.trim() : target.photoUrl;

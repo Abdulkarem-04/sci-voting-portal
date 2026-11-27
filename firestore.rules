@@ -138,6 +138,8 @@ service cloud.firestore {
           && request.resource.data.cohort in ['C5', 'C6']
           && request.resource.data.email == request.auth.token.email.lower()
           && request.resource.data.studentId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentId
+          && request.resource.data.manifesto is string
+          && request.resource.data.manifesto.size() <= 750
         )
       );
 
@@ -145,6 +147,10 @@ service cloud.firestore {
         // 1) Candidate self-edit or Admin profile edit (strictly locked in VOTING_LIVE / ENDED)
         (
           profileEditablePhase()
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['manifesto'])
+            || (request.resource.data.manifesto is string && request.resource.data.manifesto.size() <= 750)
+          )
           && (
             isAdmin() || (
               isVerifiedAiuStudent()

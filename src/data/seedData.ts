@@ -8,6 +8,8 @@ import { generateSvgAvatarDataUrl, normalizeAiuStudentId } from '../utils/imageU
 
 export const PRIMARY_ADMIN_EMAIL = 'ajogal.abubakar@student.aiu.edu.my';
 
+export const MAX_MANIFESTO_LENGTH = 750;
+
 export const OFFICIAL_SHORTLISTED_NOMINEE_IDS: string[] = [
   'AIU25102558',
   'AIU25102391',

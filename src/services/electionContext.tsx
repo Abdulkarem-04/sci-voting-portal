@@ -22,6 +22,7 @@ import {
 import {
   createInitialSeedState,
   isOfficialShortlistedNominee,
+  MAX_MANIFESTO_LENGTH,
   PRIMARY_ADMIN_EMAIL,
 } from '../data/seedData';
 import {
@@ -1105,7 +1106,7 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           program: targetProgram,
           country: cleanCountry,
           manifesto:
-            sanitizeText(input.manifesto || '', 1200) ||
+            sanitizeText(input.manifesto || '', MAX_MANIFESTO_LENGTH) ||
             'Manifesto forthcoming ahead of Manifesto Day.',
           photoUrl:
             input.photoUrl?.trim() ||
@@ -1181,7 +1182,9 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
         if (updates.fullName !== undefined) cleanUpdates.fullName = sanitizeText(updates.fullName, 120);
         if (updates.country !== undefined) cleanUpdates.country = sanitizeText(updates.country, 64);
-        if (updates.manifesto !== undefined) cleanUpdates.manifesto = sanitizeText(updates.manifesto, 1200);
+        if (updates.manifesto !== undefined) {
+          cleanUpdates.manifesto = sanitizeText(updates.manifesto, MAX_MANIFESTO_LENGTH);
+        }
         if (updates.photoUrl !== undefined) cleanUpdates.photoUrl = updates.photoUrl.trim();
         await updateDoc(doc(firebaseDb, 'candidates', id), cleanUpdates);
         return { ok: true, message: 'Candidate profile updated.' };

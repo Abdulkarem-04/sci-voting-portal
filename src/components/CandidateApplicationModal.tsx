@@ -10,7 +10,11 @@ import {
   X,
 } from 'lucide-react';
 import { findRosterStudent } from '../data/cohortRoster';
-import { AIU_COUNTRIES, isOfficialShortlistedNominee } from '../data/seedData';
+import {
+  AIU_COUNTRIES,
+  isOfficialShortlistedNominee,
+  MAX_MANIFESTO_LENGTH,
+} from '../data/seedData';
 import { useElection } from '../services/electionContext';
 import { Candidate, CandidateStatus } from '../types/election';
 import {
@@ -382,14 +386,31 @@ export const CandidateApplicationModal: React.FC<Props> = ({
 
           {/* Manifesto */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 mb-1">
-              Manifesto {!isEditMode && <span className="text-zinc-400 font-normal">(Optional — editable until Voting Live)</span>}
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="block text-xs font-semibold text-zinc-700">
+                Manifesto{' '}
+                {!isEditMode && (
+                  <span className="text-zinc-400 font-normal">
+                    (Optional - editable until Voting Live)
+                  </span>
+                )}
+              </label>
+              <span
+                className={`font-mono text-[11px] ${
+                  manifesto.length >= MAX_MANIFESTO_LENGTH
+                    ? 'text-amber-600 font-bold'
+                    : 'text-zinc-400'
+                }`}
+              >
+                {manifesto.length} / {MAX_MANIFESTO_LENGTH}
+              </span>
+            </div>
             <textarea
               rows={4}
+              maxLength={MAX_MANIFESTO_LENGTH}
               disabled={lockedForSubmit}
               value={manifesto}
-              onChange={(e) => setManifesto(e.target.value)}
+              onChange={(e) => setManifesto(e.target.value.slice(0, MAX_MANIFESTO_LENGTH))}
               placeholder="Share your leadership priorities and commitment to SCI students..."
               className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-950 disabled:bg-zinc-100"
             />

@@ -4,7 +4,7 @@ import {
   findRosterStudent,
   verifyEmailMatchesRosterStudent,
 } from '../src/data/cohortRoster';
-import { createInitialSeedState, PRIMARY_ADMIN_EMAIL } from '../src/data/seedData';
+import { createInitialSeedState, MAX_MANIFESTO_LENGTH, PRIMARY_ADMIN_EMAIL } from '../src/data/seedData';
 import {
   localAdminUpdateUser,
   localAssignTopCommitteeRole,
@@ -609,6 +609,14 @@ runTest(14, 'Blocks non-admin privilege escalation, protects Primary Admin, and 
   assert.equal(updated.result.ok, true);
   assert.equal(/[<>]/.test(updated.result.data!.fullName), false);
   assert.equal(/[<>]/.test(updated.result.data!.manifesto), false);
+
+  // Manifesto length cap enforces MAX_MANIFESTO_LENGTH (750 chars)
+  const overlong = 'A'.repeat(1000);
+  const capped = localUpdateCandidateDetails(nomState, admin, 'cand-01', {
+    manifesto: overlong,
+  });
+  assert.equal(capped.result.ok, true);
+  assert.equal(capped.result.data!.manifesto.length, MAX_MANIFESTO_LENGTH);
 });
 
 // Test 15: Admin User Profile Editor, Role Sync, Ballot Lock Integrity & Dynamic Interview Cutoff

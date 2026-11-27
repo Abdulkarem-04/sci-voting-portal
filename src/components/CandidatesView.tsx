@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText,
   Globe,
@@ -32,6 +32,17 @@ export const CandidatesView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [programFilter, setProgramFilter] = useState<'ALL' | ProgramOfStudy>('ALL');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+
+  useEffect(() => {
+    if (!selectedCandidate) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedCandidate(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedCandidate]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -232,24 +243,30 @@ export const CandidatesView: React.FC = () => {
 
       {/* Full Manifesto Modal */}
       {selectedCandidate && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-2xl max-w-lg w-full border border-zinc-200 shadow-2xl overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedCandidate(null)}
+        >
+          <div
+            className="relative bg-white rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col border border-zinc-200 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <CardPatternBg variant="grid-nodes" />
-            <div className="relative z-10 px-6 py-5 border-b border-zinc-200 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
+            <div className="relative z-10 px-6 py-5 border-b border-zinc-200 flex items-start justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-4 min-w-0">
                 <img
                   src={selectedCandidate.photoUrl}
                   alt={selectedCandidate.fullName}
                   className="w-16 h-16 rounded-2xl object-cover border border-zinc-200 shrink-0"
                 />
-                <div>
+                <div className="min-w-0">
                   <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-emerald-600">
                     Contestant #{String(selectedCandidate.candidateNumber).padStart(2, '0')}
                   </span>
-                  <h3 className="text-lg font-extrabold text-zinc-950 leading-tight">
+                  <h3 className="text-lg font-extrabold text-zinc-950 leading-tight truncate">
                     {selectedCandidate.fullName}
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-xs text-zinc-500 mt-0.5 truncate">
                     {shortProgramLabel(selectedCandidate.program)} (Year{' '}
                     {selectedCandidate.yearOfStudy})
                   </p>
@@ -258,22 +275,22 @@ export const CandidatesView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSelectedCandidate(null)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 shrink-0"
                 aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="relative z-10 p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-xs bg-zinc-50 rounded-xl p-3.5 border border-zinc-200">
+            <div className="relative z-10 flex-1 min-h-0 overflow-y-auto scrollbar-thin p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-zinc-50 rounded-xl p-3.5 border border-zinc-200">
                 <div>
                   <div className="text-zinc-400">Nationality</div>
                   <div className="font-bold text-zinc-900 mt-0.5">
                     {selectedCandidate.country}
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-zinc-400">Student Email</div>
                   <div className="font-semibold text-zinc-900 mt-0.5 truncate">
                     {selectedCandidate.email}
@@ -285,13 +302,13 @@ export const CandidatesView: React.FC = () => {
                 <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
                   Official Manifesto Statement
                 </h4>
-                <p className="text-sm text-zinc-700 mt-1.5 leading-relaxed whitespace-pre-line">
+                <p className="text-sm text-zinc-700 mt-1.5 leading-relaxed whitespace-pre-line break-words">
                   {selectedCandidate.manifesto}
                 </p>
               </div>
             </div>
 
-            <div className="relative z-10 px-6 py-4 border-t border-zinc-100 bg-zinc-50/70 flex items-center justify-end gap-2">
+            <div className="relative z-10 px-6 py-4 border-t border-zinc-100 bg-zinc-50/70 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCandidate(null)}
