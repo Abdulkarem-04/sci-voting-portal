@@ -153,7 +153,13 @@ interface ElectionContextValue {
     partial: Partial<
       Pick<
         ElectionConfig,
-        'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+        | 'currentPhase'
+        | 'liveResultsPublic'
+        | 'totalRegisteredVoters'
+        | 'labBoothPin'
+        | 'topAdvancingCount'
+        | 'votingDateDisplay'
+        | 'votingWindowDisplay'
       >
     >
   ) => Promise<ActionResult>;
@@ -1260,7 +1266,13 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       partial: Partial<
         Pick<
           ElectionConfig,
-          'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+          | 'currentPhase'
+          | 'liveResultsPublic'
+          | 'totalRegisteredVoters'
+          | 'labBoothPin'
+          | 'topAdvancingCount'
+          | 'votingDateDisplay'
+          | 'votingWindowDisplay'
         >
       >
     ): Promise<ActionResult> => {
@@ -1283,14 +1295,27 @@ export const ElectionProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           message: 'Interview shortlist cutoff must be a positive whole number or set to Undecided.',
         };
       }
+      const cleanPartial = { ...partial };
+      if (cleanPartial.votingDateDisplay !== undefined) {
+        cleanPartial.votingDateDisplay = sanitizeText(cleanPartial.votingDateDisplay, 64);
+        if (!cleanPartial.votingDateDisplay) {
+          return { ok: false, message: 'Voting date display cannot be empty.' };
+        }
+      }
+      if (cleanPartial.votingWindowDisplay !== undefined) {
+        cleanPartial.votingWindowDisplay = sanitizeText(cleanPartial.votingWindowDisplay, 64);
+        if (!cleanPartial.votingWindowDisplay) {
+          return { ok: false, message: 'Voting window display cannot be empty.' };
+        }
+      }
       if (isFirebaseConfigured && firebaseDb) {
         await updateDoc(doc(firebaseDb, 'electionConfig', 'current'), {
-          ...partial,
+          ...cleanPartial,
           lastUpdatedAt: new Date().toISOString(),
         });
         return { ok: true, message: 'Election settings updated.' };
       }
-      const { nextState, result } = localUpdateConfig(dbState, currentUser, partial);
+      const { nextState, result } = localUpdateConfig(dbState, currentUser, cleanPartial);
       if (result.ok) notifyLocalSync(nextState);
       return result;
     },

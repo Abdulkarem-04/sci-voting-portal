@@ -99,6 +99,8 @@ export const AdminView: React.FC = () => {
   const [cutoffDraft, setCutoffDraft] = useState<string>(
     dbState.config.topAdvancingCount ? String(dbState.config.topAdvancingCount) : ''
   );
+  const [dateDraft, setDateDraft] = useState<string>(dbState.config.votingDateDisplay);
+  const [windowDraft, setWindowDraft] = useState<string>(dbState.config.votingWindowDisplay);
 
   // Physical Lab Voting Booth Check-In state
   const [labStudentId, setLabStudentId] = useState('');
@@ -322,6 +324,24 @@ export const AdminView: React.FC = () => {
       return;
     }
     await handleSetCutoff(parsed);
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await updateElectionConfig({
+      votingDateDisplay: dateDraft,
+      votingWindowDisplay: windowDraft,
+    });
+    showFeedback(res.ok, res.message);
+  };
+
+  const handleQuickSyncSundayDate = async () => {
+    const targetDate = 'Sunday, November 29, 2026';
+    const res = await updateElectionConfig({ votingDateDisplay: targetDate });
+    if (res.ok) {
+      setDateDraft(targetDate);
+    }
+    showFeedback(res.ok, res.ok ? `Voting date updated to ${targetDate}.` : res.message);
   };
 
   const openUserEditor = (u: UserProfile) => {
@@ -744,6 +764,58 @@ export const AdminView: React.FC = () => {
             </div>
           </form>
         </div>
+
+        {/* Voting Date & Polling Window Schedule */}
+        <form
+          onSubmit={handleSaveSchedule}
+          className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 flex flex-col lg:flex-row lg:items-end justify-between gap-3"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+            <div>
+              <label className="block text-xs font-bold text-zinc-900 mb-1">
+                Voting Date Display
+              </label>
+              <input
+                type="text"
+                required
+                value={dateDraft}
+                onChange={(e) => setDateDraft(e.target.value)}
+                placeholder="Sunday, November 29, 2026"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-950"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-zinc-900 mb-1">
+                Polling Hours Window
+              </label>
+              <input
+                type="text"
+                required
+                value={windowDraft}
+                onChange={(e) => setWindowDraft(e.target.value)}
+                placeholder="09:30 AM - 05:30 PM"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-950"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {config.votingDateDisplay !== 'Sunday, November 29, 2026' && (
+              <button
+                type="button"
+                onClick={handleQuickSyncSundayDate}
+                className="rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900"
+              >
+                Sync to Sunday, Nov 29
+              </button>
+            )}
+            <button
+              type="submit"
+              className="rounded-lg bg-zinc-950 hover:bg-zinc-800 px-3.5 py-1.5 text-xs font-bold text-white"
+            >
+              Save Schedule
+            </button>
+          </div>
+        </form>
       </section>
 
       {/* 2. Physical Lab Voting Booth Check-In Station */}

@@ -1024,7 +1024,13 @@ export function localUpdateConfig(
   partial: Partial<
     Pick<
       ElectionConfig,
-      'currentPhase' | 'liveResultsPublic' | 'totalRegisteredVoters' | 'labBoothPin' | 'topAdvancingCount'
+      | 'currentPhase'
+      | 'liveResultsPublic'
+      | 'totalRegisteredVoters'
+      | 'labBoothPin'
+      | 'topAdvancingCount'
+      | 'votingDateDisplay'
+      | 'votingWindowDisplay'
     >
   >
 ): { nextState: ElectionDatabaseState; result: ActionResult } {
@@ -1050,10 +1056,23 @@ export function localUpdateConfig(
       },
     };
   }
+  const cleanPartial = { ...partial };
+  if (cleanPartial.votingDateDisplay !== undefined) {
+    cleanPartial.votingDateDisplay = sanitizeText(cleanPartial.votingDateDisplay, 64);
+    if (!cleanPartial.votingDateDisplay) {
+      return { nextState: state, result: { ok: false, message: 'Voting date display cannot be empty.' } };
+    }
+  }
+  if (cleanPartial.votingWindowDisplay !== undefined) {
+    cleanPartial.votingWindowDisplay = sanitizeText(cleanPartial.votingWindowDisplay, 64);
+    if (!cleanPartial.votingWindowDisplay) {
+      return { nextState: state, result: { ok: false, message: 'Voting window display cannot be empty.' } };
+    }
+  }
   const next = cloneState(state);
   next.config = {
     ...next.config,
-    ...partial,
+    ...cleanPartial,
     lastUpdatedAt: new Date().toISOString(),
   };
   next.auditLogs = appendAuditLog(

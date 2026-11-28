@@ -301,7 +301,7 @@ export const PHASE_META: Record<
 };
 
 export function createInitialSeedState(): ElectionDatabaseState {
-  const nowIso = '2026-11-30T09:30:00.000Z';
+  const nowIso = '2026-11-29T09:30:00.000Z';
 
   return {
     config: {
@@ -314,7 +314,7 @@ export function createInitialSeedState(): ElectionDatabaseState {
       maxVotesPerBallot: 4,
       topAdvancingCount: null,
       liveResultsPublic: true,
-      votingDateDisplay: 'Monday, November 30, 2026',
+      votingDateDisplay: 'Sunday, November 29, 2026',
       votingWindowDisplay: '09:30 AM - 05:30 PM',
       totalRegisteredVoters: ELIGIBLE_VOTER_COUNT,
       totalBallotsCast: 196,
